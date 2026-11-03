@@ -134,8 +134,7 @@ void missionSetup() {
   pinMode(PIN_COLOR_S3, OUTPUT);
   pinMode(PIN_COLOR_OUT, INPUT);
   pinMode(PIN_COLOR_LED, OUTPUT);
-  // TODO(Adiel): your sketch leaves digitalWrite(led, LOW) commented out.
-  // Confirm whether the LED should be on or off while reading.
+  digitalWrite(PIN_COLOR_LED, HIGH);  // LED on while reading
   digitalWrite(PIN_COLOR_S0, HIGH);
   digitalWrite(PIN_COLOR_S1, LOW);
 

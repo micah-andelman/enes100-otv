@@ -115,8 +115,8 @@ const float SIM_OBSTACLE_THRESH_M  = 0.40;  // obstacle if closer than this
 // ---- Mission ----
 const float SAMPLE_ML        = 30.0;   // requirement is >= 20 mL
 const float PUMP_ML_PER_S    = 2.5;    // [MEASURE] unmeasured placeholder from Walter's sketch
-const int   ARM_STOW_DEG     = 0;      // [MEASURE] arm folded flat over the chassis
-const int   ARM_DOWN_DEG     = 90;     // [MEASURE] arm out over the water
+const int   ARM_STOW_DEG     = 20;     // [MEASURE] arm folded flat over the chassis (Walter's sketch: 20)
+const int   ARM_DOWN_DEG     = 160;    // [MEASURE] arm out over the water (Walter's sketch: 160)
 const bool  SERVO2_MIRRORED  = false;  // [MEASURE] true if servo 2 is mounted facing servo 1
 const unsigned long SERVO_STEP_MS = 15;  // per 1 degree of sweep (limits 5 V rail spikes)
 const unsigned long ARM_SETTLE_MS = 500; // after arm down, before reading (chosen, not specified)
