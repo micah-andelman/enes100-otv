@@ -44,11 +44,16 @@ const char* const TEAM_NAME = "H2Woah!";
 const byte TEAM_TYPE        = WATER;
 const int MARKER_ID         = 80;
 const int ROOM_NUMBER       = 1120;
+// WiFi module TX/RX pins: ignored on the R4 (onboard WiFi), but the
+// browser simulator only accepts the 6-argument Enes100.begin().
+const int VISION_WIFI_TX    = 8;
+const int VISION_WIFI_RX    = 9;
 
 // ---- Serial ----
 const long SERIAL_BAUD = 115200;
 
-// ---- Pins ----
+#if !SIM
+// ---- Pins (robot only: the browser simulator has no A0..A5) ----
 // D0/D1: reserved for USB serial. D4: unused (old MS2 map had color
 // OUT here). A4: free.
 const int PIN_IR          = 2;   // KY-032 IR obstacle sensor (digital)
@@ -70,6 +75,7 @@ const int PIN_COLOR_LED   = A5;  // TCS3200 LED
 
 // ---- IR obstacle sensor ----
 const int IR_OBSTACLE_LEVEL = LOW;  // [MEASURE] assumed LOW = obstacle; needs bench verify
+#endif
 
 // ---- Drive (DO NOT RAISE MAX_PWM without asking Micah) ----
 // 6 V motors on a 9.6 V pack: cap at 60% (0.60 * 255 = 153).

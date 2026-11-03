@@ -12,9 +12,23 @@ void navSetup() {
 // ---------------- Helpers ----------------
 
 // Enes100.println only works once the vision system has started.
-void logMsg(const String &msg) {
+// The simulator has no Serial.
+void logMsg(const char *msg) {
+#if !SIM
   Serial.println(msg);
+#endif
   if (gVisionStarted) Enes100.println(msg);
+}
+
+void logVal(const char *label, float value) {
+#if !SIM
+  Serial.print(label);
+  Serial.println(value);
+#endif
+  if (gVisionStarted) {
+    Enes100.print(label);
+    Enes100.println(value);
+  }
 }
 
 float wrapAngle(float a) {
@@ -123,21 +137,21 @@ bool passColumn(float columnX) {
   for (int i = 0; i < NUM_LANES; i++) {
     float laneY = LANE_Y[i];
     if (!driveTo(columnX - APPROACH_DIST, laneY, POS_TOL_M)) {
-      logMsg(String("passColumn: approach failed, lane y=") + laneY);
+      logVal("passColumn: approach failed, lane y = ", laneY);
     }
     turnTo(0.0);
     stopDrive();
     delay(OBSTACLE_PAUSE_MS);
 
     if (obstacleAhead()) {
-      logMsg(String("Column x=") + columnX + ": lane y=" + laneY + " blocked");
+      logVal("Lane blocked, y = ", laneY);
       continue;
     }
 
-    logMsg(String("Column x=") + columnX + ": lane y=" + laneY + " clear");
+    logVal("Lane clear, y = ", laneY);
     return driveTo(columnX + CLEARANCE_DIST, laneY, POS_TOL_M);
   }
-  logMsg(String("Column x=") + columnX + ": all lanes blocked");
+  logVal("All lanes blocked at column x = ", columnX);
   return false;
 }
 

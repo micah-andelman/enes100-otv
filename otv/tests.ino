@@ -45,7 +45,7 @@ static void testUltrasonic() {
 
 static void testColor() {
   int r, g, b;
-  readColorRaw(r, g, b);
+  readColorRaw(&r, &g, &b);
   Serial.print("R=");
   Serial.print(r);
   Serial.print(" G=");
@@ -70,22 +70,23 @@ static void testVision() {
   delay(TEST_VISION_MS);
 }
 
+bool gTestDone = false;
+
 // Called every loop(). One-shot tests run once, then idle with motors
 // and pump off. Print tests repeat forever.
 void runTests() {
-  static bool done = false;
   switch (TEST_MODE) {
     case TEST_DRIVE:
-      if (!done) testDrive();
-      done = true;
+      if (!gTestDone) testDrive();
+      gTestDone = true;
       break;
     case TEST_PUMP:
-      if (!done) testPump();
-      done = true;
+      if (!gTestDone) testPump();
+      gTestDone = true;
       break;
     case TEST_ARM:
-      if (!done) testArm();
-      done = true;
+      if (!gTestDone) testArm();
+      gTestDone = true;
       break;
     case TEST_ULTRASONIC:
       testUltrasonic();

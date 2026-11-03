@@ -11,19 +11,16 @@ void missionSetup() {}
 void armDown() { delay(SIM_ARM_MS); }
 void armStow() { delay(SIM_ARM_MS); }
 
-void pumpDispenseML(float ml) {
-  (void)ml;
-  delay(SIM_PUMP_MS);
-}
+void pumpDispenseML(float ml) { delay(SIM_PUMP_MS); }
 
 float readDistanceMM() { return -1; }
 
 int computeDepthMM() { return SIM_DEPTH_MM; }
 
-void readColorRaw(int &r, int &g, int &b) {
-  r = 0;
-  g = 0;
-  b = 0;
+void readColorRaw(int *r, int *g, int *b) {
+  *r = 0;
+  *g = 0;
+  *b = 0;
 }
 
 bool isPolluted() { return SIM_POLLUTED; }
@@ -107,17 +104,17 @@ static int readColorPW(int s2, int s3) {
   return pw;
 }
 
-void readColorRaw(int &r, int &g, int &b) {
-  r = readColorPW(LOW, LOW);    // red filter
-  g = readColorPW(HIGH, HIGH);  // green filter
-  b = readColorPW(LOW, HIGH);   // blue filter
+void readColorRaw(int *r, int *g, int *b) {
+  *r = readColorPW(LOW, LOW);    // red filter
+  *g = readColorPW(HIGH, HIGH);  // green filter
+  *b = readColorPW(LOW, HIGH);   // blue filter
 }
 
 // Adiel's rule: polluted if ANY channel's pulse width is below the
 // threshold (a strong non-black color). Threshold is uncalibrated.
 bool isPolluted() {
   int r, g, b;
-  readColorRaw(r, g, b);
+  readColorRaw(&r, &g, &b);
   return (b < COLOR_POLLUTED_THRESH || r < COLOR_POLLUTED_THRESH || g < COLOR_POLLUTED_THRESH);
 }
 
@@ -165,5 +162,6 @@ void runMission() {
   Enes100.mission(DEPTH, depthMM);
   Enes100.mission(WATER_TYPE, polluted ? FRESH_POLLUTED : FRESH_UNPOLLUTED);
 
-  logMsg(String("Mission sent: depth ") + depthMM + " mm, " + (polluted ? "polluted" : "unpolluted"));
+  logVal("Mission sent: depth mm = ", depthMM);
+  logMsg(polluted ? "Mission sent: polluted" : "Mission sent: unpolluted");
 }

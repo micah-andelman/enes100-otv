@@ -12,8 +12,11 @@
 #endif
 
 bool gVisionStarted = false;
+bool gRunDone = false;  // global, not a static local (the simulator resets those)
 
 void setup() {
+#if !SIM
+  // The simulator has no Serial.
   Serial.begin(SERIAL_BAUD);
   // Prints when this code was compiled, so you can tell
   // which version is on the board.
@@ -21,9 +24,10 @@ void setup() {
   Serial.print(__DATE__);
   Serial.print(" ");
   Serial.println(__TIME__);
-  Serial.println(SIM ? "Target: SIMULATOR" : "Target: ROBOT");
+  Serial.println("Target: ROBOT");
   Serial.print("TEST_MODE: ");
   Serial.println(TEST_MODE);
+#endif
 
   driveSetup();
   missionSetup();
@@ -32,17 +36,19 @@ void setup() {
   // Only start vision when it is needed: hardware bench tests must run
   // without the vision system.
 #if (TEST_MODE == TEST_NONE) || (TEST_MODE == TEST_VISION)
-  Enes100.begin(TEAM_NAME, TEAM_TYPE, MARKER_ID, ROOM_NUMBER);
+  Enes100.begin(TEAM_NAME, TEAM_TYPE, MARKER_ID, ROOM_NUMBER, VISION_WIFI_TX, VISION_WIFI_RX);
   gVisionStarted = true;
+#endif
+#if SIM
+  logMsg("Target: SIMULATOR");
 #endif
 }
 
 void loop() {
 #if TEST_MODE == TEST_NONE
-  static bool runDone = false;
-  if (!runDone) {
+  if (!gRunDone) {
     runFullRun();
-    runDone = true;
+    gRunDone = true;
   }
   stopDrive();
   delay(LOOP_MS);
