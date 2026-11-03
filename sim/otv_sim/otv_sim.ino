@@ -46,7 +46,8 @@ const unsigned long LOOP_MS = 20;
 const unsigned long VISION_LOST_MS = 3000; // give up a move after this long without the marker
 const unsigned long WIFI_CONNECT_MS = 30000; // R4 begin() returns before WiFi connects (chosen, not specified)
 const unsigned long VISION_START_MS = 10000; // give up the run if no marker at start (after WiFi is up)
-const unsigned long MOVE_TIMEOUT_MS = 15000; // per turnTo/driveTo call
+const unsigned long MOVE_TIMEOUT_MS = 15000; // per turnTo call; driveTo adds travel time below
+const float DRIVE_SPEED_MPS = 0.075; // [MEASURE] MS2 operating speed 7.54 cm/s; sizes driveTo timeouts
 const unsigned long BACKUP_MS = 800; // reverse time after the mission
 // ---- Arena (vision frame: x 0..4 m, y 0..2 m) ----
 // Source: official "Arena Details" doc (ENES100 course drive) diagram.
@@ -313,15 +314,23 @@ bool turnTo(float heading) {
 }
 // Heading-corrected drive toward (x, y). Stops within stopDistance.
 // Large heading errors stop and turn in place first.
+// Timeout = MOVE_TIMEOUT_MS plus the expected travel time, so long legs
+// on the slow real robot don't time out.
 bool driveTo(float x, float y, float stopDistance) {
   unsigned long start = millis();
+  unsigned long timeoutMs = MOVE_TIMEOUT_MS;
+  if (Enes100.isVisible()) {
+    float dx0 = x - Enes100.getX();
+    float dy0 = y - Enes100.getY();
+    timeoutMs += (unsigned long)(1000.0 * sqrt(dx0 * dx0 + dy0 * dy0) / DRIVE_SPEED_MPS);
+  }
   while (true) {
     if (!waitForVision(VISION_LOST_MS)) {
       stopDrive();
       logMsg("driveTo: vision lost");
       return false;
     }
-    if (millis() - start >= MOVE_TIMEOUT_MS) {
+    if (millis() - start >= timeoutMs) {
       stopDrive();
       logMsg("driveTo: timeout");
       return false;
@@ -434,4 +443,4 @@ void runFullRun() {
 // ===================== otv/tests.ino =====================
 // Bench tests: robot only. Build with -DSIM=0 -DTEST_MODE=n.
 // All output goes to Serial at SERIAL_BAUD.
-//   1 Drive   2 Pump   3 Arm   4 Ultrasonic   5 Color   6 Vision
+//   1 Drive   2 Pump   3 Arm   4 Ultrasonic   5 Color   6 Vision   7 IR

@@ -117,15 +117,23 @@ bool turnTo(float heading) {
 
 // Heading-corrected drive toward (x, y). Stops within stopDistance.
 // Large heading errors stop and turn in place first.
+// Timeout = MOVE_TIMEOUT_MS plus the expected travel time, so long legs
+// on the slow real robot don't time out.
 bool driveTo(float x, float y, float stopDistance) {
   unsigned long start = millis();
+  unsigned long timeoutMs = MOVE_TIMEOUT_MS;
+  if (Enes100.isVisible()) {
+    float dx0 = x - Enes100.getX();
+    float dy0 = y - Enes100.getY();
+    timeoutMs += (unsigned long)(1000.0 * sqrt(dx0 * dx0 + dy0 * dy0) / DRIVE_SPEED_MPS);
+  }
   while (true) {
     if (!waitForVision(VISION_LOST_MS)) {
       stopDrive();
       logMsg("driveTo: vision lost");
       return false;
     }
-    if (millis() - start >= MOVE_TIMEOUT_MS) {
+    if (millis() - start >= timeoutMs) {
       stopDrive();
       logMsg("driveTo: timeout");
       return false;

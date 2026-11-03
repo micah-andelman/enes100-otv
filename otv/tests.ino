@@ -1,6 +1,6 @@
 // Bench tests: robot only. Build with -DSIM=0 -DTEST_MODE=n.
 // All output goes to Serial at SERIAL_BAUD.
-//   1 Drive   2 Pump   3 Arm   4 Ultrasonic   5 Color   6 Vision
+//   1 Drive   2 Pump   3 Arm   4 Ultrasonic   5 Color   6 Vision   7 IR
 
 #if !SIM
 
@@ -70,6 +70,15 @@ static void testVision() {
   delay(TEST_VISION_MS);
 }
 
+// Checks the KY-032 polarity (IR_OBSTACLE_LEVEL is assumed LOW = obstacle).
+// Hold a hand in front and watch both columns change.
+static void testIR() {
+  Serial.print("IR pin=");
+  Serial.print(digitalRead(PIN_IR) == HIGH ? "HIGH" : "LOW");
+  Serial.println(obstacleAhead() ? "  obstacle" : "  clear");
+  delay(TEST_PRINT_MS);
+}
+
 bool gTestDone = false;
 
 // Called every loop(). One-shot tests run once, then idle with motors
@@ -96,6 +105,9 @@ void runTests() {
       break;
     case TEST_VISION:
       testVision();
+      break;
+    case TEST_IR:
+      testIR();
       break;
   }
 }

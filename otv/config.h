@@ -21,15 +21,16 @@
 #define TEST_ULTRASONIC  4
 #define TEST_COLOR       5
 #define TEST_VISION      6
+#define TEST_IR          7
 #ifndef TEST_MODE
 #define TEST_MODE TEST_NONE
 #endif
 
-#if (TEST_MODE < TEST_NONE) || (TEST_MODE > TEST_VISION)
-#error "TEST_MODE must be 0..6"
+#if (TEST_MODE < TEST_NONE) || (TEST_MODE > TEST_IR)
+#error "TEST_MODE must be 0..7"
 #endif
 #if SIM && (TEST_MODE != TEST_NONE)
-#error "Bench tests (TEST_MODE 1-6) are robot-only. Build with -DSIM=0."
+#error "Bench tests (TEST_MODE 1-7) are robot-only. Build with -DSIM=0."
 #endif
 
 #if SIM
@@ -95,7 +96,8 @@ const unsigned long LOOP_MS          = 20;
 const unsigned long VISION_LOST_MS   = 3000;   // give up a move after this long without the marker
 const unsigned long WIFI_CONNECT_MS  = 30000;  // R4 begin() returns before WiFi connects (chosen, not specified)
 const unsigned long VISION_START_MS  = 10000;  // give up the run if no marker at start (after WiFi is up)
-const unsigned long MOVE_TIMEOUT_MS  = 15000;  // per turnTo/driveTo call
+const unsigned long MOVE_TIMEOUT_MS  = 15000;  // per turnTo call; driveTo adds travel time below
+const float DRIVE_SPEED_MPS          = 0.075;  // [MEASURE] MS2 operating speed 7.54 cm/s; sizes driveTo timeouts
 const unsigned long BACKUP_MS        = 800;    // reverse time after the mission
 
 // ---- Arena (vision frame: x 0..4 m, y 0..2 m) ----
