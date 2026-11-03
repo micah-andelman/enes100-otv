@@ -26,6 +26,13 @@
       "problemMatcher": []
     },
     {
+      "label": "Pull Teammate Code",
+      "type": "shell",
+      "command": "powershell -ExecutionPolicy Bypass -File tools/pull_teammates.ps1; git status --short teammates",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
       "label": "Make Sim File",
       "type": "shell",
       "command": "powershell -ExecutionPolicy Bypass -File tools/make_sim.ps1",

@@ -44,6 +44,8 @@ You don't need GitHub or any install beyond the Arduino IDE.
 
 ## Uploading (Micah)
 
+**Pull teammate code:** run the VS Code task **Pull Teammate Code**. It copies new or changed `.ino` files from the Drive folder into `teammates/`.
+
 VS Code: **Ctrl+Shift+B** builds the robot target, asks for TEST_MODE and the COM port, then uploads.
 Find the port with `arduino-cli board list`. Close the Serial Monitor before uploading.
 After changing `otv/`, run the **Make Sim File** task to regenerate the simulator file.
