@@ -1,0 +1,43 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Compile",
+      "type": "shell",
+      "command": "arduino-cli compile otv --build-path build",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "Upload",
+      "type": "shell",
+      "command": "arduino-cli upload otv --input-dir build -p ${input:port}",
+      "options": { "cwd": "${workspaceFolder}" },
+      "dependsOn": "Compile",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Serial Monitor",
+      "type": "shell",
+      "command": "arduino-cli monitor -p ${input:port} -c baudrate=115200",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Refresh IntelliSense",
+      "type": "shell",
+      "command": "arduino-cli compile otv --build-path build --only-compilation-database",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "port",
+      "type": "promptString",
+      "description": "Serial port (e.g. COM3)"
+    }
+  ]
+}
