@@ -47,7 +47,6 @@ const unsigned long VISION_LOST_MS = 3000; // give up a move after this long wit
 const unsigned long VISION_START_MS = 10000; // give up the run if no marker at start
 const unsigned long MOVE_TIMEOUT_MS = 15000; // per turnTo/driveTo call
 const unsigned long BACKUP_MS = 800; // reverse time after the mission
-const unsigned long OBSTACLE_PAUSE_MS = 300; // settle before checking a lane (chosen, not specified)
 // ---- Arena (vision frame: x 0..4 m, y 0..2 m) ----
 const float MISSION_TOP_X = 0.55; // [MEASURE]
 const float MISSION_TOP_Y = 1.45; // [MEASURE]
@@ -55,17 +54,20 @@ const float MISSION_BOT_X = 0.55; // [MEASURE]
 const float MISSION_BOT_Y = 0.55; // [MEASURE]
 const float ARENA_MID_Y = 1.0; // [MEASURE]
 const float MISSION_STOP_DIST = 0.30; // [MEASURE] tune so the OTV front ends within 150 mm of the pool edge
-const float COLUMN1_X = 1.5; // obstacle column center (official Arena Details doc)
-const float COLUMN2_X = 2.3; // obstacle column center (official Arena Details doc)
-const float LANE_Y[] = {1.5, 1.0, 0.5}; // [MEASURE] obstacle lanes, checked in this order
-const int NUM_LANES = sizeof(LANE_Y) / sizeof(LANE_Y[0]);
-const float APPROACH_DIST = 0.45; // [MEASURE] stop this far before a column center
-const float CLEARANCE_DIST = 0.35; // [MEASURE] drive this far past a column center
-const float LIMBO_LANE_Y = 1.5; // [MEASURE] limbo is always in the top half
+// Obstacle columns are centered at x = 1.5 and 2.3 (official Arena Details
+// doc). In the simulator each obstacle is 0.2 m wide x 0.5 m tall and the
+// rows span y = 0.25..1.75, leaving a 0.25 m gap to each wall (MS2: OTV
+// < 25 cm wide for the obstacle-to-wall gap).
+// Plan: avoid all obstacles by hugging the top wall through that gap, then
+// drop to the limbo lane (limbo is always in the top half).
+const float WALL_HUG_Y = 1.875; // [MEASURE] center of the top obstacle-to-wall gap
+const float WALL_HUG_GAIN = 3.0; // aim-back angle (rad) per m off the hug line (tune)
+const float HUG_START_X = 1.0; // [MEASURE] join the hug line before column 1 (x 1.4..1.6)
+const float HUG_END_X = 2.7; // [MEASURE] leave the hug line after column 2 (x 2.2..2.4)
+const float LIMBO_ALIGN_X = 3.0; // [MEASURE] be on the limbo lane by here (before the limbo)
+const float LIMBO_LANE_Y = 1.5; // [MEASURE] center of the limbo opening (top half)
 const float GOAL_X = 3.7; // [MEASURE] inside the destination zone
-// ---- Obstacle sensing (simulator) ----
-const int SIM_OBSTACLE_SENSOR_ID = 1; // Tank distance sensor (enabled by default)
-const float SIM_OBSTACLE_THRESH_M = 0.40; // obstacle if closer than this
+const unsigned long HUG_TIMEOUT_MS = 40000; // [MEASURE] 1.7 m hug at ~7 cm/s on the robot
 // ---- Mission ----
 const float SAMPLE_ML = 30.0; // requirement is >= 20 mL
 const float PUMP_ML_PER_S = 2.5; // [MEASURE] unmeasured placeholder from Walter's sketch
@@ -120,10 +122,9 @@ void logMsg(const char *msg); // no String: the simulator doesn't have it
 void logVal(const char *label, float value);
 float wrapAngle(float a);
 bool waitForVision(unsigned long timeoutMs);
-bool obstacleAhead();
 bool turnTo(float heading);
 bool driveTo(float x, float y, float stopDistance);
-bool passColumn(float columnX);
+bool hugWall(float xEnd);
 void runFullRun();
 // tests.ino (robot only)
 void runTests();
@@ -241,10 +242,6 @@ bool waitForVision(unsigned long timeoutMs) {
   }
   return true;
 }
-bool obstacleAhead() {
-  float d = Tank.readDistanceSensor(SIM_OBSTACLE_SENSOR_ID);
-  return d > 0 && d < SIM_OBSTACLE_THRESH_M;
-}
 // ---------------- Moves ----------------
 // Turn in place to an absolute heading. PWM is proportional to the
 // heading error, clamped to MIN_TURN_PWM..MAX_PWM.
@@ -309,27 +306,40 @@ bool driveTo(float x, float y, float stopDistance) {
     delay(LOOP_MS);
   }
 }
-// Get past one obstacle column. Tries each lane in order: stop before
-// the column facing +x, check for an obstacle, and drive through the
-// first clear lane.
-bool passColumn(float columnX) {
-  for (int i = 0; i < NUM_LANES; i++) {
-    float laneY = LANE_Y[i];
-    if (!driveTo(columnX - APPROACH_DIST, laneY, POS_TOL_M)) {
-      logVal("passColumn: approach failed, lane y = ", laneY);
+// Drive +x along the top wall at WALL_HUG_Y until x >= xEnd, passing
+// every obstacle through the obstacle-to-wall gap. Steers back toward
+// the hug line in proportion to how far off it the OTV is.
+bool hugWall(float xEnd) {
+  unsigned long start = millis();
+  while (true) {
+    if (!waitForVision(VISION_LOST_MS)) {
+      stopDrive();
+      logMsg("hugWall: vision lost");
+      return false;
     }
-    turnTo(0.0);
-    stopDrive();
-    delay(OBSTACLE_PAUSE_MS);
-    if (obstacleAhead()) {
-      logVal("Lane blocked, y = ", laneY);
+    if (millis() - start >= HUG_TIMEOUT_MS) {
+      stopDrive();
+      logMsg("hugWall: timeout");
+      return false;
+    }
+    if (Enes100.getX() >= xEnd) {
+      stopDrive();
+      return true;
+    }
+    float target = atan(WALL_HUG_GAIN * (WALL_HUG_Y - Enes100.getY()));
+    float err = wrapAngle(target - Enes100.getTheta());
+    if (fabs(err) > REALIGN_RAD) {
+      stopDrive();
+      if (!turnTo(target)) {
+        stopDrive();
+        return false;
+      }
       continue;
     }
-    logVal("Lane clear, y = ", laneY);
-    return driveTo(columnX + CLEARANCE_DIST, laneY, POS_TOL_M);
+    int correction = (int)(HEADING_GAIN * err);
+    setDrive(DRIVE_PWM - correction, DRIVE_PWM + correction);
+    delay(LOOP_MS);
   }
-  logVal("All lanes blocked at column x = ", columnX);
-  return false;
 }
 // ---------------- Full run ----------------
 // Each leg continues even if the previous one failed, to salvage
@@ -355,10 +365,14 @@ void runFullRun() {
   setDrive(-DRIVE_PWM, -DRIVE_PWM);
   delay(BACKUP_MS);
   stopDrive();
-  if (!passColumn(COLUMN1_X)) logMsg("Column 1 failed, continuing");
-  if (!passColumn(COLUMN2_X)) logMsg("Column 2 failed, continuing");
+  // Avoid all obstacles: turn to the top wall and hug it past both columns.
+  logMsg("Wall hug start");
+  if (!driveTo(HUG_START_X, WALL_HUG_Y, POS_TOL_M)) logMsg("Hug line approach failed, continuing");
+  turnTo(0.0);
+  if (!hugWall(HUG_END_X)) logMsg("Wall hug failed, continuing");
   // Under the limbo (top half), never over the log.
-  driveTo(COLUMN2_X + CLEARANCE_DIST, LIMBO_LANE_Y, POS_TOL_M);
+  logMsg("Limbo");
+  driveTo(LIMBO_ALIGN_X, LIMBO_LANE_Y, POS_TOL_M);
   turnTo(0.0);
   driveTo(GOAL_X, LIMBO_LANE_Y, POS_TOL_M);
   stopDrive();

@@ -49,15 +49,6 @@ bool waitForVision(unsigned long timeoutMs) {
   return true;
 }
 
-bool obstacleAhead() {
-#if SIM
-  float d = Tank.readDistanceSensor(SIM_OBSTACLE_SENSOR_ID);
-  return d > 0 && d < SIM_OBSTACLE_THRESH_M;
-#else
-  return digitalRead(PIN_IR) == IR_OBSTACLE_LEVEL;
-#endif
-}
-
 // ---------------- Moves ----------------
 
 // Turn in place to an absolute heading. PWM is proportional to the
@@ -130,29 +121,43 @@ bool driveTo(float x, float y, float stopDistance) {
   }
 }
 
-// Get past one obstacle column. Tries each lane in order: stop before
-// the column facing +x, check for an obstacle, and drive through the
-// first clear lane.
-bool passColumn(float columnX) {
-  for (int i = 0; i < NUM_LANES; i++) {
-    float laneY = LANE_Y[i];
-    if (!driveTo(columnX - APPROACH_DIST, laneY, POS_TOL_M)) {
-      logVal("passColumn: approach failed, lane y = ", laneY);
+// Drive +x along the top wall at WALL_HUG_Y until x >= xEnd, passing
+// every obstacle through the obstacle-to-wall gap. Steers back toward
+// the hug line in proportion to how far off it the OTV is.
+bool hugWall(float xEnd) {
+  unsigned long start = millis();
+  while (true) {
+    if (!waitForVision(VISION_LOST_MS)) {
+      stopDrive();
+      logMsg("hugWall: vision lost");
+      return false;
     }
-    turnTo(0.0);
-    stopDrive();
-    delay(OBSTACLE_PAUSE_MS);
+    if (millis() - start >= HUG_TIMEOUT_MS) {
+      stopDrive();
+      logMsg("hugWall: timeout");
+      return false;
+    }
 
-    if (obstacleAhead()) {
-      logVal("Lane blocked, y = ", laneY);
+    if (Enes100.getX() >= xEnd) {
+      stopDrive();
+      return true;
+    }
+
+    float target = atan(WALL_HUG_GAIN * (WALL_HUG_Y - Enes100.getY()));
+    float err = wrapAngle(target - Enes100.getTheta());
+    if (fabs(err) > REALIGN_RAD) {
+      stopDrive();
+      if (!turnTo(target)) {
+        stopDrive();
+        return false;
+      }
       continue;
     }
 
-    logVal("Lane clear, y = ", laneY);
-    return driveTo(columnX + CLEARANCE_DIST, laneY, POS_TOL_M);
+    int correction = (int)(HEADING_GAIN * err);
+    setDrive(DRIVE_PWM - correction, DRIVE_PWM + correction);
+    delay(LOOP_MS);
   }
-  logVal("All lanes blocked at column x = ", columnX);
-  return false;
 }
 
 // ---------------- Full run ----------------
@@ -183,11 +188,15 @@ void runFullRun() {
   delay(BACKUP_MS);
   stopDrive();
 
-  if (!passColumn(COLUMN1_X)) logMsg("Column 1 failed, continuing");
-  if (!passColumn(COLUMN2_X)) logMsg("Column 2 failed, continuing");
+  // Avoid all obstacles: turn to the top wall and hug it past both columns.
+  logMsg("Wall hug start");
+  if (!driveTo(HUG_START_X, WALL_HUG_Y, POS_TOL_M)) logMsg("Hug line approach failed, continuing");
+  turnTo(0.0);
+  if (!hugWall(HUG_END_X)) logMsg("Wall hug failed, continuing");
 
   // Under the limbo (top half), never over the log.
-  driveTo(COLUMN2_X + CLEARANCE_DIST, LIMBO_LANE_Y, POS_TOL_M);
+  logMsg("Limbo");
+  driveTo(LIMBO_ALIGN_X, LIMBO_LANE_Y, POS_TOL_M);
   turnTo(0.0);
   driveTo(GOAL_X, LIMBO_LANE_Y, POS_TOL_M);
   stopDrive();

@@ -32,10 +32,9 @@ void logMsg(const char *msg);  // no String: the simulator doesn't have it
 void logVal(const char *label, float value);
 float wrapAngle(float a);
 bool waitForVision(unsigned long timeoutMs);
-bool obstacleAhead();
 bool turnTo(float heading);
 bool driveTo(float x, float y, float stopDistance);
-bool passColumn(float columnX);
+bool hugWall(float xEnd);
 void runFullRun();
 
 // tests.ino (robot only)
