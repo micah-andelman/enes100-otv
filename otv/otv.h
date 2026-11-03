@@ -31,7 +31,9 @@ void navSetup();
 void logMsg(const char *msg);  // no String: the simulator doesn't have it
 void logVal(const char *label, float value);
 float wrapAngle(float a);
+bool waitForConnection(unsigned long timeoutMs);
 bool waitForVision(unsigned long timeoutMs);
+bool obstacleAhead();
 bool turnTo(float heading);
 bool driveTo(float x, float y, float stopDistance);
 bool hugWall(float xEnd);

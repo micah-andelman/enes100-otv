@@ -38,6 +38,7 @@ void setup() {
 #if (TEST_MODE == TEST_NONE) || (TEST_MODE == TEST_VISION)
   Enes100.begin(TEAM_NAME, TEAM_TYPE, MARKER_ID, ROOM_NUMBER, VISION_WIFI_TX, VISION_WIFI_RX);
   gVisionStarted = true;
+  if (!waitForConnection(WIFI_CONNECT_MS)) logMsg("Vision system not connected, continuing");
 #endif
 #if SIM
   logMsg("Target: SIMULATOR");

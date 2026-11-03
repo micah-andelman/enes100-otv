@@ -4,7 +4,7 @@
     {
       "label": "Compile",
       "type": "shell",
-      "command": "arduino-cli compile otv --build-path build",
+      "command": "arduino-cli compile otv --build-path build --build-property \"compiler.cpp.extra_flags=-DSIM=0 -DTEST_MODE=${input:testMode}\"",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "build",
       "problemMatcher": "$gcc"
@@ -26,9 +26,16 @@
       "problemMatcher": []
     },
     {
+      "label": "Make Sim File",
+      "type": "shell",
+      "command": "powershell -ExecutionPolicy Bypass -File tools/make_sim.ps1",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
       "label": "Refresh IntelliSense",
       "type": "shell",
-      "command": "arduino-cli compile otv --build-path build --only-compilation-database",
+      "command": "arduino-cli compile otv --build-path build --only-compilation-database --build-property \"compiler.cpp.extra_flags=-DSIM=0\"",
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     }
@@ -38,6 +45,13 @@
       "id": "port",
       "type": "promptString",
       "description": "Serial port (e.g. COM3)"
+    },
+    {
+      "id": "testMode",
+      "type": "pickString",
+      "description": "TEST_MODE: 0 full mission, 1 drive, 2 pump, 3 arm, 4 ultrasonic, 5 color, 6 vision",
+      "options": ["0", "1", "2", "3", "4", "5", "6"],
+      "default": "1"
     }
   ]
 }

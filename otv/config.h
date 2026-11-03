@@ -93,31 +93,43 @@ const float REALIGN_RAD        = 0.50;   // driveTo stops and turns in place abo
 const float POS_TOL_M          = 0.05;   // waypoint reached inside this distance
 const unsigned long LOOP_MS          = 20;
 const unsigned long VISION_LOST_MS   = 3000;   // give up a move after this long without the marker
-const unsigned long VISION_START_MS  = 10000;  // give up the run if no marker at start
+const unsigned long WIFI_CONNECT_MS  = 30000;  // R4 begin() returns before WiFi connects (chosen, not specified)
+const unsigned long VISION_START_MS  = 10000;  // give up the run if no marker at start (after WiFi is up)
 const unsigned long MOVE_TIMEOUT_MS  = 15000;  // per turnTo/driveTo call
 const unsigned long BACKUP_MS        = 800;    // reverse time after the mission
 
 // ---- Arena (vision frame: x 0..4 m, y 0..2 m) ----
-const float MISSION_TOP_X     = 0.55;  // [MEASURE]
-const float MISSION_TOP_Y     = 1.45;  // [MEASURE]
-const float MISSION_BOT_X     = 0.55;  // [MEASURE]
-const float MISSION_BOT_Y     = 0.55;  // [MEASURE]
-const float ARENA_MID_Y       = 1.0;   // [MEASURE]
+// Source: official "Arena Details" doc (ENES100 course drive) diagram.
+// Zones along x: landing/mission 0-0.8, obstacles 0.8-2.8, open 2.8-3.4,
+// limbo/log at ~3.4, goal 3.4-4.0.
+const float MISSION_TOP_X     = 0.5;   // square A center (doc)
+const float MISSION_TOP_Y     = 1.5;   // square A center (doc)
+const float MISSION_BOT_X     = 0.5;   // square B center (doc)
+const float MISSION_BOT_Y     = 0.5;   // square B center (doc)
+const float ARENA_MID_Y       = 1.0;   // A and B are 1.0 m apart, split at y = 1.0 (doc)
 const float MISSION_STOP_DIST = 0.30;  // [MEASURE] tune so the OTV front ends within 150 mm of the pool edge
-// Obstacle columns are centered at x = 1.5 and 2.3 (official Arena Details
-// doc). In the simulator each obstacle is 0.2 m wide x 0.5 m tall and the
-// rows span y = 0.25..1.75, leaving a 0.25 m gap to each wall (MS2: OTV
-// < 25 cm wide for the obstacle-to-wall gap).
+// Obstacles: 0.2 m wide x 0.5 m tall, columns centered at x = 1.5 and 2.3,
+// rows spanning y = 0.25..1.75. That leaves a 0.25 m gap to each wall
+// (MS2: OTV < 25 cm wide for the obstacle-to-wall gap).
 // Plan: avoid all obstacles by hugging the top wall through that gap, then
-// drop to the limbo lane (limbo is always in the top half).
-const float WALL_HUG_Y        = 1.875; // [MEASURE] center of the top obstacle-to-wall gap
+// drop to the limbo lane. Limbo spans the top half (y 1.0-2.0) with 22 cm
+// walls under each end, so the opening is y 1.22-1.78.
+const float WALL_HUG_Y        = 1.875; // center of the top gap (y 1.75-2.0, doc)
 const float WALL_HUG_GAIN     = 3.0;   // aim-back angle (rad) per m off the hug line (tune)
-const float HUG_START_X       = 1.0;   // [MEASURE] join the hug line before column 1 (x 1.4..1.6)
-const float HUG_END_X         = 2.7;   // [MEASURE] leave the hug line after column 2 (x 2.2..2.4)
-const float LIMBO_ALIGN_X     = 3.0;   // [MEASURE] be on the limbo lane by here (before the limbo)
-const float LIMBO_LANE_Y      = 1.5;   // [MEASURE] center of the limbo opening (top half)
-const float GOAL_X            = 3.7;   // [MEASURE] inside the destination zone
+const float HUG_START_X       = 1.0;   // [MEASURE] join the hug line before column 1 (x 1.4-1.6)
+const float HUG_END_X         = 2.7;   // [MEASURE] leave the hug line after column 2 (x 2.2-2.4)
+const float LIMBO_ALIGN_X     = 3.0;   // [MEASURE] be on the limbo lane by here (open zone 2.8-3.4)
+const float LIMBO_LANE_Y      = 1.5;   // center of the limbo opening (doc)
+const float GOAL_X            = 3.7;   // center of the goal zone 3.4-4.0 (doc)
 const unsigned long HUG_TIMEOUT_MS = 40000;  // [MEASURE] 1.7 m hug at ~7 cm/s on the robot
+
+// ---- Obstacle safety stop (MS2 nav flow: front IR sees obstacle ->
+// stop, back up, re-route with vision). Off for the pool approach, since
+// the pool is straight ahead there.
+const int   SIM_OBSTACLE_SENSOR_ID = 1;     // Tank distance sensor (enabled by default)
+const float SIM_OBSTACLE_THRESH_M  = 0.40;  // obstacle if closer than this
+const unsigned long OBSTACLE_BACKUP_MS = 500;  // reverse time per hit (chosen, not specified)
+const int   MAX_OBSTACLE_HITS      = 3;     // give up the move after this many hits (chosen)
 
 // ---- Mission ----
 const float SAMPLE_ML        = 30.0;   // requirement is >= 20 mL

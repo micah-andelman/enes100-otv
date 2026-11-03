@@ -1,5 +1,6 @@
 # Compiles the OTV sketch on every push and pull request.
 # A red X on a PR means the code does not compile.
+# Builds both targets: simulator (SIM=1, default) and robot (SIM=0).
 name: Compile OTV
 
 on:
@@ -10,6 +11,14 @@ on:
 jobs:
   compile:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - name: simulator
+            flags: compiler.cpp.extra_flags=-DSIM=1
+          - name: robot
+            flags: compiler.cpp.extra_flags=-DSIM=0
+    name: compile (${{ matrix.target.name }})
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/compile-sketches@v1
@@ -19,5 +28,12 @@ jobs:
             - name: arduino:renesas_uno
           sketch-paths: |
             - otv
+          cli-compile-flags: |
+            - --build-property
+            - ${{ matrix.target.flags }}
           libraries: |
             - name: Servo
+            - name: ArduinoHttpClient
+            - source-url: https://github.com/umdenes100/ENES100ArduinoLibrary.git
+              version: v6.2.4
+            - source-url: https://github.com/umdenes100/TankArduinoLibrary.git

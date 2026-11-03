@@ -37,6 +37,18 @@ float wrapAngle(float a) {
   return a;
 }
 
+// On the R4, Enes100.begin() returns before WiFi and the vision server
+// are connected. Wait here so the start-of-run vision timeout doesn't
+// get used up by a slow connection.
+bool waitForConnection(unsigned long timeoutMs) {
+  unsigned long start = millis();
+  while (!Enes100.isConnected()) {
+    if (millis() - start >= timeoutMs) return false;
+    delay(LOOP_MS);
+  }
+  return true;
+}
+
 // Holds the motors stopped while the marker is not visible.
 // Returns false if it stays hidden for timeoutMs.
 bool waitForVision(unsigned long timeoutMs) {
@@ -46,6 +58,28 @@ bool waitForVision(unsigned long timeoutMs) {
     if (millis() - start >= timeoutMs) return false;
     delay(LOOP_MS);
   }
+  return true;
+}
+
+bool obstacleAhead() {
+#if SIM
+  float d = Tank.readDistanceSensor(SIM_OBSTACLE_SENSOR_ID);
+  return d > 0 && d < SIM_OBSTACLE_THRESH_M;
+#else
+  return digitalRead(PIN_IR) == IR_OBSTACLE_LEVEL;
+#endif
+}
+
+// MS2 safety stop: if the front sensor sees something, stop and back up.
+// The caller re-aims from the vision position on its next loop.
+// Returns true if it backed off.
+static bool backOffIfBlocked() {
+  if (!obstacleAhead()) return false;
+  stopDrive();
+  logMsg("Obstacle ahead: backing up");
+  setDrive(-DRIVE_PWM, -DRIVE_PWM);
+  delay(OBSTACLE_BACKUP_MS);
+  stopDrive();
   return true;
 }
 
@@ -124,8 +158,12 @@ bool driveTo(float x, float y, float stopDistance) {
 // Drive +x along the top wall at WALL_HUG_Y until x >= xEnd, passing
 // every obstacle through the obstacle-to-wall gap. Steers back toward
 // the hug line in proportion to how far off it the OTV is.
+// This is the only leg that passes the obstacle columns, so it is the only
+// one that runs the front-sensor safety stop (the other legs head at the
+// pool or an arena wall, which the IR would read as an obstacle).
 bool hugWall(float xEnd) {
   unsigned long start = millis();
+  int hits = 0;
   while (true) {
     if (!waitForVision(VISION_LOST_MS)) {
       stopDrive();
@@ -141,6 +179,15 @@ bool hugWall(float xEnd) {
     if (Enes100.getX() >= xEnd) {
       stopDrive();
       return true;
+    }
+
+    if (backOffIfBlocked()) {
+      hits++;
+      if (hits >= MAX_OBSTACLE_HITS) {
+        logMsg("hugWall: still blocked, giving up");
+        return false;
+      }
+      continue;
     }
 
     float target = atan(WALL_HUG_GAIN * (WALL_HUG_Y - Enes100.getY()));
