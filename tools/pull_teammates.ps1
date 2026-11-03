@@ -35,6 +35,12 @@ if ($dupes) {
     throw 'Rename or remove the duplicates in Drive, then run again.'
 }
 
+# Compare text with line endings normalized: git (core.autocrlf) may check
+# files out with CRLF while Drive has LF, which is not a real change.
+function Get-NormalizedText([string]$Path) {
+    return ([System.IO.File]::ReadAllText($Path)) -replace "`r`n", "`n"
+}
+
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 $new = 0; $updated = 0; $same = 0
 foreach ($f in $files) {
@@ -43,7 +49,7 @@ foreach ($f in $files) {
         Copy-Item -LiteralPath $f.FullName -Destination $target
         Write-Host "NEW      $($f.Name)"
         $new++
-    } elseif ((Get-FileHash -LiteralPath $f.FullName).Hash -ne (Get-FileHash -LiteralPath $target).Hash) {
+    } elseif ((Get-NormalizedText $f.FullName) -cne (Get-NormalizedText $target)) {
         Copy-Item -LiteralPath $f.FullName -Destination $target -Force
         Write-Host "UPDATED  $($f.Name)"
         $updated++
