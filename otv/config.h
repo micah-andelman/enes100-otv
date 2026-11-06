@@ -43,12 +43,17 @@
 // WATER comes from Enes100.h, which must be included before this file.
 const char* const TEAM_NAME = "H2Woah!";
 const byte TEAM_TYPE        = WATER;
-const int MARKER_ID         = 80;
+#if SIM
+const int MARKER_ID         = 54;  // ENES100 physical Tank (Tank-mode builds)
+#else
+const int MARKER_ID         = 80;  // our OTV
+#endif
 const int ROOM_NUMBER       = 1120;
-// WiFi module TX/RX pins: ignored on the R4 (onboard WiFi), but the
-// browser simulator only accepts the 6-argument Enes100.begin().
-const int VISION_WIFI_TX    = 8;
-const int VISION_WIFI_RX    = 9;
+// WiFi module TX/RX pins: ignored on the R4 (onboard WiFi). The physical
+// Tank (Mega) uses 52/50 (ENES100 Physical Tank Guide). The browser
+// simulator only accepts the 6-argument Enes100.begin().
+const int VISION_WIFI_TX    = 52;
+const int VISION_WIFI_RX    = 50;
 
 // ---- Serial ----
 const long SERIAL_BAUD = 115200;
@@ -93,7 +98,11 @@ const float TURN_TOL_RAD       = 0.08;   // turnTo done inside this error
 const float REALIGN_RAD        = 0.50;   // driveTo stops and turns in place above this error
 const float POS_TOL_M          = 0.05;   // waypoint reached inside this distance
 const unsigned long LOOP_MS          = 20;
+#if SIM
+const unsigned long VISION_LOST_MS   = 6000;   // Tank testing: tolerate marker flicker near the arena edge
+#else
 const unsigned long VISION_LOST_MS   = 3000;   // give up a move after this long without the marker
+#endif
 const unsigned long WIFI_CONNECT_MS  = 30000;  // R4 begin() returns before WiFi connects (chosen, not specified)
 const unsigned long VISION_START_MS  = 10000;  // give up the run if no marker at start (after WiFi is up)
 const unsigned long MOVE_TIMEOUT_MS  = 15000;  // per turnTo call; driveTo adds travel time below
@@ -118,7 +127,12 @@ const float MISSION_STOP_DIST = 0.30;  // [MEASURE] tune so the OTV front ends w
 // walls under each end, so the opening is y 1.22-1.78.
 const float WALL_HUG_Y        = 1.875; // center of the top gap (y 1.75-2.0, doc)
 const float WALL_HUG_GAIN     = 3.0;   // aim-back angle (rad) per m off the hug line (tune)
-const float HUG_START_X       = 1.0;   // [MEASURE] join the hug line before column 1 (x 1.4-1.6)
+// Staging point for the wall hug: turn to +x here, well away from the wall
+// (turning in place 12.5 cm from the wall swings the OTV's corner into it),
+// then hugWall curves up onto WALL_HUG_Y before column 1 (x 1.4-1.6).
+// Kept clear of the top mission site (pool at ~(0.5, 1.5)).
+const float HUG_STAGE_X       = 0.8;   // [MEASURE]
+const float HUG_STAGE_Y       = 1.65;  // [MEASURE]
 const float HUG_END_X         = 2.7;   // [MEASURE] leave the hug line after column 2 (x 2.2-2.4)
 const float LIMBO_ALIGN_X     = 3.0;   // [MEASURE] be on the limbo lane by here (open zone 2.8-3.4)
 const float LIMBO_LANE_Y      = 1.5;   // center of the limbo opening (doc)

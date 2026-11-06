@@ -31,6 +31,18 @@ void logVal(const char *label, float value) {
   }
 }
 
+// Prints where vision thinks the OTV is (or that the marker is hidden).
+void logPose(const char *label) {
+  logMsg(label);
+  if (!Enes100.isVisible()) {
+    logMsg("  pose: marker not visible");
+    return;
+  }
+  logVal("  x = ", Enes100.getX());
+  logVal("  y = ", Enes100.getY());
+  logVal("  theta = ", Enes100.getTheta());
+}
+
 float wrapAngle(float a) {
   while (a > PI) a -= TWO_PI;
   while (a < -PI) a += TWO_PI;
@@ -232,28 +244,37 @@ void runFullRun() {
   float siteY = startTop ? MISSION_BOT_Y : MISSION_TOP_Y;
   logMsg(startTop ? "Started in top square, mission site is bottom"
                   : "Started in bottom square, mission site is top");
+  logPose("Pose at start");
 
   if (!driveTo(siteX, siteY, MISSION_STOP_DIST)) {
     logMsg("Mission site approach failed, running mission anyway");
   }
   stopDrive();
+  logPose("Pose at mission site");
   runMission();
 
   setDrive(-DRIVE_PWM, -DRIVE_PWM);
   delay(BACKUP_MS);
   stopDrive();
+  logPose("Pose after backup");
 
-  // Avoid all obstacles: turn to the top wall and hug it past both columns.
+  // Avoid all obstacles: turn to +x at a staging point away from the wall,
+  // then hugWall curves up onto the hug line and follows it past both columns.
   logMsg("Wall hug start");
-  if (!driveTo(HUG_START_X, WALL_HUG_Y, POS_TOL_M)) logMsg("Hug line approach failed, continuing");
+  if (!driveTo(HUG_STAGE_X, HUG_STAGE_Y, POS_TOL_M)) logMsg("Hug staging approach failed, continuing");
+  logPose("Pose at hug start");
   turnTo(0.0);
+  logPose("Pose after turn to +x");
   if (!hugWall(HUG_END_X)) logMsg("Wall hug failed, continuing");
+  logPose("Pose after wall hug");
 
   // Under the limbo (top half), never over the log.
   logMsg("Limbo");
   driveTo(LIMBO_ALIGN_X, LIMBO_LANE_Y, POS_TOL_M);
+  logPose("Pose at limbo align");
   turnTo(0.0);
   driveTo(GOAL_X, LIMBO_LANE_Y, POS_TOL_M);
   stopDrive();
+  logPose("Pose at end");
   logMsg("Run complete");
 }

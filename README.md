@@ -49,3 +49,7 @@ You don't need GitHub or any install beyond the Arduino IDE.
 VS Code: **Ctrl+Shift+B** builds the robot target, asks for TEST_MODE and the COM port, then uploads.
 Find the port with `arduino-cli board list`. Close the Serial Monitor before uploading.
 After changing `otv/`, run the **Make Sim File** task to regenerate the simulator file.
+
+**Physical Tank (nav testing):** with the Tank's power **off**, plug in USB and run
+`arduino-cli compile --upload -p COMx --fqbn arduino:avr:mega otv`. Unplug, place the Tank in a start square, then power it on.
+Never power the Tank on while it's plugged into the laptop. Output shows on the room 1120 vision page, not the Serial Monitor.

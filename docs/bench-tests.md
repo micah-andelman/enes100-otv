@@ -121,5 +121,5 @@ Connects to the vision system, then prints x, y, theta, visible every 0.25 s.
 ## After the bench tests
 
 Full run (`TEST_MODE=0`) in the arena. Values to tune there: `MISSION_STOP_DIST`
-(front within 150 mm of the pool), `HUG_START_X`, `HUG_END_X`, `LIMBO_ALIGN_X`,
+(front within 150 mm of the pool), `HUG_STAGE_X`/`HUG_STAGE_Y`, `HUG_END_X`, `LIMBO_ALIGN_X`,
 `DRIVE_SPEED_MPS`.
