@@ -3,6 +3,10 @@
 // pins or Tank directly.
 // Heading convention (vision frame): 0 = +x, positive = counter-clockwise.
 
+// Last x seen by driveTo (global: the simulator resets static locals).
+// Used to size the blind drive if the limbo hides the marker.
+float gLastX = 0;
+
 void navSetup() {
 #if !SIM
   pinMode(PIN_IR, INPUT);
@@ -151,7 +155,8 @@ bool driveTo(float x, float y, float stopDistance) {
       return false;
     }
 
-    float dx = x - Enes100.getX();
+    gLastX = Enes100.getX();
+    float dx = x - gLastX;
     float dy = y - Enes100.getY();
     if (sqrt(dx * dx + dy * dy) <= stopDistance) {
       stopDrive();
@@ -227,6 +232,21 @@ bool hugWall(float xEnd) {
   }
 }
 
+// Last leg fallback: the limbo rod can hide the marker, and driveTo stops
+// when vision is lost. If that happened, drive straight (+x, already
+// aligned) for the remaining distance from the last seen x.
+static void finishBlindIfVisionLost() {
+  if (Enes100.isVisible()) return;  // driveTo failed for another reason
+  float remaining = GOAL_X - gLastX;
+  if (remaining <= 0) return;
+  unsigned long ms = (unsigned long)(1000.0 * remaining / DRIVE_SPEED_MPS);
+  if (ms > LIMBO_BLIND_MAX_MS) ms = LIMBO_BLIND_MAX_MS;
+  logVal("Vision lost on last leg, driving blind ms = ", ms);
+  setDrive(DRIVE_PWM, DRIVE_PWM);
+  delay(ms);
+  stopDrive();
+}
+
 // ---------------- Full run ----------------
 // Each leg continues even if the previous one failed, to salvage
 // partial points.
@@ -273,7 +293,7 @@ void runFullRun() {
   driveTo(LIMBO_ALIGN_X, LIMBO_LANE_Y, POS_TOL_M);
   logPose("Pose at limbo align");
   turnTo(0.0);
-  driveTo(GOAL_X, LIMBO_LANE_Y, POS_TOL_M);
+  if (!driveTo(GOAL_X, LIMBO_LANE_Y, POS_TOL_M)) finishBlindIfVisionLost();
   stopDrive();
   logPose("Pose at end");
   logMsg("Run complete");

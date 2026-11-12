@@ -37,9 +37,14 @@ static void testArm() {
 }
 
 static void testUltrasonic() {
-  Serial.print("Distance: ");
-  Serial.print(readDistanceMM());
-  Serial.println(" mm");
+  float d = readDistanceMM();
+  if (d < 0) {
+    Serial.println("Distance: FAILED (no echo), not data");
+  } else {
+    Serial.print("Distance: ");
+    Serial.print(d);
+    Serial.println(" mm");
+  }
   delay(TEST_PRINT_MS);
 }
 
@@ -52,9 +57,13 @@ static void testColor() {
   Serial.print(g);
   Serial.print(" B=");
   Serial.print(b);
-  // Same decision rule as isPolluted(), on this reading.
-  bool polluted = (b < COLOR_POLLUTED_THRESH || r < COLOR_POLLUTED_THRESH || g < COLOR_POLLUTED_THRESH);
-  Serial.println(polluted ? "  polluted" : "  not polluted");
+  // 0 = that channel FAILED (timed out): don't use this line as calibration data.
+  if (r == 0 || g == 0 || b == 0) {
+    Serial.println("  FAILED (0 = no reading), not data");
+  } else {
+    // Same decision rule as isPolluted(), on this reading.
+    Serial.println(colorIsPolluted(r, g, b) ? "  polluted" : "  not polluted");
+  }
   delay(TEST_PRINT_MS);
 }
 

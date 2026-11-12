@@ -138,6 +138,9 @@ const float LIMBO_ALIGN_X     = 3.0;   // [MEASURE] be on the limbo lane by here
 const float LIMBO_LANE_Y      = 1.5;   // center of the limbo opening (doc)
 const float GOAL_X            = 3.7;   // center of the goal zone 3.4-4.0 (doc)
 const unsigned long HUG_TIMEOUT_MS = 40000;  // [MEASURE] 1.7 m hug at ~7 cm/s on the robot
+// If the limbo rod hides the marker on the last leg, drive straight for the
+// remaining distance (from the last seen x and DRIVE_SPEED_MPS), capped here.
+const unsigned long LIMBO_BLIND_MAX_MS = 12000;  // chosen: ~0.9 m at 7.5 cm/s
 
 // ---- Obstacle safety stop (MS2 nav flow: front IR sees obstacle ->
 // stop, back up, re-route with vision). Off for the pool approach, since
@@ -155,12 +158,21 @@ const int   ARM_DOWN_DEG     = 160;    // [MEASURE] arm out over the water (Walt
 const bool  SERVO2_MIRRORED  = false;  // [MEASURE] true if servo 2 is mounted facing servo 1
 const unsigned long SERVO_STEP_MS = 15;  // per 1 degree of sweep (limits 5 V rail spikes)
 const unsigned long ARM_SETTLE_MS = 500; // after arm down, before reading (chosen, not specified)
-const int   US_SAMPLES       = 25;     // ultrasonic readings averaged per measurement
+const int   US_SAMPLES       = 25;     // ultrasonic readings per measurement (median is used)
 const unsigned long US_TIMEOUT_US = 30000;  // pulseIn timeout
+const unsigned long US_PING_GAP_MS = 60;    // HC-SR04 datasheet: >= 60 ms between pings (old echoes)
 const float US_MM_PER_US     = 0.343;  // speed of sound; divide by 2 for round trip
 const float SENSOR_HEIGHT_MM = 0;      // [MEASURE] sensor height above bowl bottom (owned by the depth teammate)
 const int   COLOR_POLLUTED_THRESH = 400;  // [MEASURE] pulse width below this = color seen (uncalibrated)
 const unsigned long COLOR_SETTLE_MS = 200; // between R/G/B reads (from Adiel's sketch)
+const int   COLOR_SAMPLES    = 5;      // pulse widths per channel (median is used)
+const unsigned long COLOR_TIMEOUT_US = 100000;  // pulseIn timeout; 0 = no reading, ignored
+// Depth is always 20, 30, or 40 mm, so the reading snaps to the nearest one
+// (any reading within +/-5 mm comes out exact). A failed reading sends the middle value.
+const int   DEPTH_MIN_MM      = 20;
+const int   DEPTH_MAX_MM      = 40;
+const int   DEPTH_STEP_MM     = 10;
+const int   DEPTH_FALLBACK_MM = 30;
 
 // ---- Simulator stand-ins (no water in the sim) ----
 const int  SIM_DEPTH_MM   = 30;

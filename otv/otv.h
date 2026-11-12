@@ -24,7 +24,11 @@ float readDistanceMM();
 int computeDepthMM();
 void readColorRaw(int *r, int *g, int *b);  // pointers: the simulator can't parse references
 bool isPolluted();
+int snapDepthMM(int rawMM);  // nearest of 20/30/40; fallback if the reading failed
 void runMission();
+#if !SIM
+bool colorIsPolluted(int r, int g, int b);  // shared by isPolluted() and bench test 5
+#endif
 
 // nav.ino
 void navSetup();

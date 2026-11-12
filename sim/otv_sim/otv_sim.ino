@@ -79,6 +79,9 @@ const float LIMBO_ALIGN_X = 3.0; // [MEASURE] be on the limbo lane by here (open
 const float LIMBO_LANE_Y = 1.5; // center of the limbo opening (doc)
 const float GOAL_X = 3.7; // center of the goal zone 3.4-4.0 (doc)
 const unsigned long HUG_TIMEOUT_MS = 40000; // [MEASURE] 1.7 m hug at ~7 cm/s on the robot
+// If the limbo rod hides the marker on the last leg, drive straight for the
+// remaining distance (from the last seen x and DRIVE_SPEED_MPS), capped here.
+const unsigned long LIMBO_BLIND_MAX_MS = 12000; // chosen: ~0.9 m at 7.5 cm/s
 // ---- Obstacle safety stop (MS2 nav flow: front IR sees obstacle ->
 // stop, back up, re-route with vision). Off for the pool approach, since
 // the pool is straight ahead there.
@@ -94,12 +97,21 @@ const int ARM_DOWN_DEG = 160; // [MEASURE] arm out over the water (Walter's sket
 const bool SERVO2_MIRRORED = false; // [MEASURE] true if servo 2 is mounted facing servo 1
 const unsigned long SERVO_STEP_MS = 15; // per 1 degree of sweep (limits 5 V rail spikes)
 const unsigned long ARM_SETTLE_MS = 500; // after arm down, before reading (chosen, not specified)
-const int US_SAMPLES = 25; // ultrasonic readings averaged per measurement
+const int US_SAMPLES = 25; // ultrasonic readings per measurement (median is used)
 const unsigned long US_TIMEOUT_US = 30000; // pulseIn timeout
+const unsigned long US_PING_GAP_MS = 60; // HC-SR04 datasheet: >= 60 ms between pings (old echoes)
 const float US_MM_PER_US = 0.343; // speed of sound; divide by 2 for round trip
 const float SENSOR_HEIGHT_MM = 0; // [MEASURE] sensor height above bowl bottom (owned by the depth teammate)
 const int COLOR_POLLUTED_THRESH = 400; // [MEASURE] pulse width below this = color seen (uncalibrated)
 const unsigned long COLOR_SETTLE_MS = 200; // between R/G/B reads (from Adiel's sketch)
+const int COLOR_SAMPLES = 5; // pulse widths per channel (median is used)
+const unsigned long COLOR_TIMEOUT_US = 100000; // pulseIn timeout; 0 = no reading, ignored
+// Depth is always 20, 30, or 40 mm, so the reading snaps to the nearest one
+// (any reading within +/-5 mm comes out exact). A failed reading sends the middle value.
+const int DEPTH_MIN_MM = 20;
+const int DEPTH_MAX_MM = 40;
+const int DEPTH_STEP_MM = 10;
+const int DEPTH_FALLBACK_MM = 30;
 // ---- Simulator stand-ins (no water in the sim) ----
 const int SIM_DEPTH_MM = 30;
 const bool SIM_POLLUTED = false;
@@ -133,6 +145,7 @@ float readDistanceMM();
 int computeDepthMM();
 void readColorRaw(int *r, int *g, int *b); // pointers: the simulator can't parse references
 bool isPolluted();
+int snapDepthMM(int rawMM); // nearest of 20/30/40; fallback if the reading failed
 void runMission();
 // nav.ino
 void navSetup();
@@ -212,13 +225,24 @@ void readColorRaw(int *r, int *g, int *b) {
 }
 bool isPolluted() { return SIM_POLLUTED; }
 // ---------------- Both targets ----------------
+// The pool depth is always 20, 30, or 40 mm: snap to the nearest.
+// A failed reading (negative) sends DEPTH_FALLBACK_MM.
+int snapDepthMM(int rawMM) {
+  if (rawMM < 0) return DEPTH_FALLBACK_MM;
+  int d = constrain(rawMM, DEPTH_MIN_MM, DEPTH_MAX_MM);
+  int steps = (d - DEPTH_MIN_MM + DEPTH_STEP_MM / 2) / DEPTH_STEP_MM;
+  return DEPTH_MIN_MM + steps * DEPTH_STEP_MM;
+}
 // Each mission() call happens exactly once: graded demos hide prints,
 // so results go out as single final mission() calls.
 void runMission() {
   logMsg("Mission: arm down");
   armDown();
   delay(ARM_SETTLE_MS);
-  int depthMM = computeDepthMM();
+  int rawDepthMM = computeDepthMM();
+  if (rawDepthMM < 0) logMsg("Mission: depth reading FAILED, sending fallback (not data)");
+  else logVal("Mission: raw depth mm = ", rawDepthMM);
+  int depthMM = snapDepthMM(rawDepthMM);
   bool polluted = isPolluted();
   logMsg("Mission: pumping sample");
   pumpDispenseML(SAMPLE_ML);
@@ -233,6 +257,9 @@ void runMission() {
 // Only calls setDrive()/stopDrive() for motion. Never touches motor
 // pins or Tank directly.
 // Heading convention (vision frame): 0 = +x, positive = counter-clockwise.
+// Last x seen by driveTo (global: the simulator resets static locals).
+// Used to size the blind drive if the limbo hides the marker.
+float gLastX = 0;
 void navSetup() {
 }
 // ---------------- Helpers ----------------
@@ -352,7 +379,8 @@ bool driveTo(float x, float y, float stopDistance) {
       logMsg("driveTo: timeout");
       return false;
     }
-    float dx = x - Enes100.getX();
+    gLastX = Enes100.getX();
+    float dx = x - gLastX;
     float dy = y - Enes100.getY();
     if (sqrt(dx * dx + dy * dy) <= stopDistance) {
       stopDrive();
@@ -420,6 +448,20 @@ bool hugWall(float xEnd) {
     delay(LOOP_MS);
   }
 }
+// Last leg fallback: the limbo rod can hide the marker, and driveTo stops
+// when vision is lost. If that happened, drive straight (+x, already
+// aligned) for the remaining distance from the last seen x.
+static void finishBlindIfVisionLost() {
+  if (Enes100.isVisible()) return; // driveTo failed for another reason
+  float remaining = GOAL_X - gLastX;
+  if (remaining <= 0) return;
+  unsigned long ms = (unsigned long)(1000.0 * remaining / DRIVE_SPEED_MPS);
+  if (ms > LIMBO_BLIND_MAX_MS) ms = LIMBO_BLIND_MAX_MS;
+  logVal("Vision lost on last leg, driving blind ms = ", ms);
+  setDrive(DRIVE_PWM, DRIVE_PWM);
+  delay(ms);
+  stopDrive();
+}
 // ---------------- Full run ----------------
 // Each leg continues even if the previous one failed, to salvage
 // partial points.
@@ -461,7 +503,7 @@ void runFullRun() {
   driveTo(LIMBO_ALIGN_X, LIMBO_LANE_Y, POS_TOL_M);
   logPose("Pose at limbo align");
   turnTo(0.0);
-  driveTo(GOAL_X, LIMBO_LANE_Y, POS_TOL_M);
+  if (!driveTo(GOAL_X, LIMBO_LANE_Y, POS_TOL_M)) finishBlindIfVisionLost();
   stopDrive();
   logPose("Pose at end");
   logMsg("Run complete");

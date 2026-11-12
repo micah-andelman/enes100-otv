@@ -63,24 +63,42 @@ void pumpDispenseML(float ml) {
   digitalWrite(PIN_PUMP_GATE, LOW);
 }
 
+// Median of the first n values (sorts v in place). Ignores outliers that
+// would drag an average off.
+static float medianOf(float *v, int n) {
+  for (int i = 1; i < n; i++) {
+    float key = v[i];
+    int j = i - 1;
+    while (j >= 0 && v[j] > key) {
+      v[j + 1] = v[j];
+      j--;
+    }
+    v[j + 1] = key;
+  }
+  if (n % 2 == 1) return v[n / 2];
+  return (v[n / 2 - 1] + v[n / 2]) / 2.0;
+}
+
 // ---- Ultrasonic (from Adiel's ultrasonic_sensor.ino) ----
 // Fixes: echo is round trip, so distance = 0.343 * t / 2; loop runs
-// exactly US_SAMPLES times; averages only valid readings (pulseIn
-// returns 0 on timeout). Returns -1 if no reading was valid.
+// exactly US_SAMPLES times; skips invalid readings (pulseIn returns 0 on
+// timeout); waits US_PING_GAP_MS between pings so old echoes off the bowl
+// aren't read; uses the median. Returns -1 if no reading was valid.
 float readDistanceMM() {
-  float total = 0;
+  float readings[US_SAMPLES];
   int valid = 0;
   for (int i = 0; i < US_SAMPLES; i++) {
+    digitalWrite(PIN_US_TRIG, LOW);
+    delayMicroseconds(2);
     digitalWrite(PIN_US_TRIG, HIGH);
     delayMicroseconds(10);
     digitalWrite(PIN_US_TRIG, LOW);
     unsigned long duration = pulseIn(PIN_US_ECHO, HIGH, US_TIMEOUT_US);
-    if (duration == 0) continue;
-    total += US_MM_PER_US * duration / 2.0;
-    valid++;
+    if (duration > 0) readings[valid++] = US_MM_PER_US * duration / 2.0;
+    delay(US_PING_GAP_MS);
   }
   if (valid == 0) return -1;
-  return total / valid;
+  return medianOf(readings, valid);
 }
 
 // Depth logic is owned by the depth teammate.
@@ -96,12 +114,20 @@ int computeDepthMM() {
 // ---- Color (from Adiel's Color_sensor.ino) ----
 // Same frequency scaling (S0 HIGH, S1 LOW = 20%), same filter selection,
 // same pulseIn(OUT, LOW) pulse-width reads with a settle delay after each.
+// Added: COLOR_SAMPLES reads per channel, median of the valid ones.
+// Returns 0 if every read timed out (sensor not responding).
 static int readColorPW(int s2, int s3) {
   digitalWrite(PIN_COLOR_S2, s2);
   digitalWrite(PIN_COLOR_S3, s3);
-  int pw = pulseIn(PIN_COLOR_OUT, LOW);
+  float pws[COLOR_SAMPLES];
+  int valid = 0;
+  for (int i = 0; i < COLOR_SAMPLES; i++) {
+    unsigned long pw = pulseIn(PIN_COLOR_OUT, LOW, COLOR_TIMEOUT_US);
+    if (pw > 0) pws[valid++] = pw;
+  }
   delay(COLOR_SETTLE_MS);
-  return pw;
+  if (valid == 0) return 0;
+  return (int)medianOf(pws, valid);
 }
 
 void readColorRaw(int *r, int *g, int *b) {
@@ -112,10 +138,19 @@ void readColorRaw(int *r, int *g, int *b) {
 
 // Adiel's rule: polluted if ANY channel's pulse width is below the
 // threshold (a strong non-black color). Threshold is uncalibrated.
+// 0 = no reading on that channel, so it never counts as a color.
+static bool pwSeesColor(int pw) { return pw > 0 && pw < COLOR_POLLUTED_THRESH; }
+
+bool colorIsPolluted(int r, int g, int b) {
+  return pwSeesColor(r) || pwSeesColor(g) || pwSeesColor(b);
+}
+
 bool isPolluted() {
   int r, g, b;
   readColorRaw(&r, &g, &b);
-  return (b < COLOR_POLLUTED_THRESH || r < COLOR_POLLUTED_THRESH || g < COLOR_POLLUTED_THRESH);
+  if (r == 0 && g == 0 && b == 0) logMsg("Color reading FAILED (all channels), reporting unpolluted (not data)");
+  else if (r == 0 || g == 0 || b == 0) logMsg("Color reading FAILED on some channels, deciding from the rest");
+  return colorIsPolluted(r, g, b);
 }
 
 void missionSetup() {
@@ -145,6 +180,15 @@ void missionSetup() {
 #endif
 
 // ---------------- Both targets ----------------
+// The pool depth is always 20, 30, or 40 mm: snap to the nearest.
+// A failed reading (negative) sends DEPTH_FALLBACK_MM.
+int snapDepthMM(int rawMM) {
+  if (rawMM < 0) return DEPTH_FALLBACK_MM;
+  int d = constrain(rawMM, DEPTH_MIN_MM, DEPTH_MAX_MM);
+  int steps = (d - DEPTH_MIN_MM + DEPTH_STEP_MM / 2) / DEPTH_STEP_MM;
+  return DEPTH_MIN_MM + steps * DEPTH_STEP_MM;
+}
+
 // Each mission() call happens exactly once: graded demos hide prints,
 // so results go out as single final mission() calls.
 void runMission() {
@@ -152,7 +196,10 @@ void runMission() {
   armDown();
   delay(ARM_SETTLE_MS);
 
-  int depthMM = computeDepthMM();
+  int rawDepthMM = computeDepthMM();
+  if (rawDepthMM < 0) logMsg("Mission: depth reading FAILED, sending fallback (not data)");
+  else logVal("Mission: raw depth mm = ", rawDepthMM);
+  int depthMM = snapDepthMM(rawDepthMM);
   bool polluted = isPolluted();
 
   logMsg("Mission: pumping sample");
