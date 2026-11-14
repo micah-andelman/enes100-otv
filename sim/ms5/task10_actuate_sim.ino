@@ -930,4 +930,6 @@ void runMs5() {
   ms5ActuateOnce();
   logMsg("MS5 10: done");
   stopDrive();
+  // Clear end marker: afterwards loop() just idles here with the motors off.
+  logMsg("MS5 demo DONE - robot stopped");
 }
