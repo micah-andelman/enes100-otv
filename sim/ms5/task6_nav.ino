@@ -20,8 +20,9 @@
 // TEST_MODE: 0 = full mission. Robot-only bench tests:
 // MS5_TASK: 0 = normal build. Milestone 5 demos (tools/otv.ps1: otv2..otv10).
 // Numbers match the MS5 sub-tasks; 7a/7b are 71/72.
-// Simulator only: 4, 5, 6, 71, 72. Robot only: 2, 3, 10.
-// (otv8/otv9 reuse bench tests 7 and 4, so they have no MS5_TASK.)
+// Simulator only: 4, 5, 6, 71, 72, 8. Robot: 2, 3, 10 (these three also build
+// with SIM=1 as simulator dry runs: otv2sim, otv3sim, otv10sim).
+// Robot otv8/otv9 reuse bench tests 7 and 4; MS5_TASK 8 is the sim version of 8.
 
 // ---- Vision system (ENES100 library v6.2.4) ----
 // WATER comes from Enes100.h, which must be included before this file.
@@ -178,7 +179,7 @@ const unsigned long TEST_VISION_MS = 250;
 // ---- MS5 demos (MS5_TASK, see top of file) ----
 // The two #defines can be overridden from the command line
 // (otv2 -Seconds N, otv3 -TurnMs N).
-const unsigned long MS5_START_DELAY_MS = 5000; // robot demos: time to step back after power-on
+const unsigned long MS5_START_DELAY_MS = 1000; // sim dry runs of 2/3: nobody needs to step back
 const unsigned long MS5_TURN_PAUSE_MS = 2000; // between the three turns
 const unsigned long MS5_PRINT_MS = 500; // receive demo: between pose prints
 const int MS5_RECEIVE_PRINTS = 20; // receive demo: number of pose prints
@@ -194,6 +195,15 @@ const float MS5_DETOUR_END_X = 2.8; // past both obstacle columns
 // so the turns in place never sweep into a column.
 const float MS5_SIDESTEP_GAP_M = 0.3;
 const unsigned long MS5_DETOUR_TIMEOUT_MS = 90000;
+// Simulator dry runs of the robot demos (otv2sim, otv3sim, otv8sim, otv10sim).
+// The sim Tank is faster than the OTV: v = PWM/510 m/s, w = 2*PWM/255 rad/s
+// when spinning in place at +/-PWM (CLAUDE.md, read from the sim JS).
+const float SIM_DRIVE_MPS = DRIVE_PWM / 510.0;
+const unsigned long MS5_SIM_TURN90_MS = (unsigned long)(1000.0 * (PI / 2) / (2.0 * DRIVE_PWM / 255.0)); // ~1430 ms
+const float MS5_SIM_FORWARD_END_X = 3.2; // 2 dry run: stop before the limbo (x ~3.4), treads included
+const float MS5_SENSE_START_X = 1.2; // 8 sim: open floor between the start squares and column 1
+const int MS5_SENSE_PWM = 50; // 8 sim: creep at ~0.1 m/s toward the west wall
+const unsigned long MS5_SENSE_TIMEOUT_MS = 20000;
 // ===================== otv/otv.h =====================
 // Prototypes for every function shared across tabs.
 // The simulator gets one concatenated file and may not auto-generate
@@ -218,6 +228,7 @@ void readColorRaw(int *r, int *g, int *b); // pointers: the simulator can't pars
 bool isPolluted();
 int snapDepthMM(int rawMM); // nearest of 20/30/40; fallback if the reading failed
 void runMission();
+void pumpRunMs(unsigned long ms); // pump on for a fixed time (bench test 2, MS5 10; sim: stub delay)
 // nav.ino
 void navSetup();
 void logMsg(const char *msg); // no String: the simulator doesn't have it
@@ -307,6 +318,7 @@ void missionSetup() {}
 void armDown() { delay(SIM_ARM_MS); }
 void armStow() { delay(SIM_ARM_MS); }
 void pumpDispenseML(float ml) { delay(SIM_PUMP_MS); }
+void pumpRunMs(unsigned long ms) { delay(SIM_PUMP_MS); }
 float readDistanceMM() { return -1; }
 int computeDepthMM() { return SIM_DEPTH_MM; }
 void readColorRaw(int *r, int *g, int *b) {
@@ -703,7 +715,70 @@ void runRoute(bool toGoal) {
 // Numbers match the MS5 sub-tasks (7a = 71, 7b = 72). See config.h.
 // runMs5() is called every loop(); one-shot demos run once, then idle.
 bool gMs5Done = false; // global: the simulator resets static locals
-// ---------------- Robot demos (no vision) ----------------
+// ---------------- Robot demos 2, 3, 10 ----------------
+// The robot runs these blind (no vision). With SIM=1 they are simulator dry
+// runs of the same code: the sim lines up with vision first (the team does
+// that by hand on the robot) and reports what vision saw afterwards.
+static void ms5StartCountdown() {
+  logVal("MS5 demo starts in ms: ", MS5_START_DELAY_MS);
+  delay(MS5_START_DELAY_MS);
+}
+// Face +x from wherever Randomize put the Tank (the robot is placed that way).
+static bool ms5SimLineUp() {
+  if (!waitForVision(VISION_START_MS)) {
+    logMsg("MS5: no vision, aborting");
+    return false;
+  }
+  return turnTo(0.0);
+}
+// Sub-task 2: forward locomotion. Straight, open loop, longer than 3.4 m.
+static void ms5Forward() {
+  if (!ms5SimLineUp()) return;
+  float x0 = Enes100.getX();
+  float y0 = Enes100.getY();
+  // The sim Tank is 3.5x faster: drive for the time that ends before the limbo.
+  unsigned long ms = (unsigned long)(1000.0 * (MS5_SIM_FORWARD_END_X - x0) / SIM_DRIVE_MPS);
+  ms5StartCountdown();
+  logVal("MS5 2: driving forward for ms = ", ms);
+  setDrive(DRIVE_PWM, DRIVE_PWM);
+  delay(ms);
+  stopDrive();
+  logMsg("MS5 2: stopped");
+  delay(MS5_PRINT_MS);
+  float dx = Enes100.getX() - x0;
+  float dy = Enes100.getY() - y0;
+  logPose("MS5 2: end pose");
+  logVal("MS5 2: distance m = ", sqrt(dx * dx + dy * dy));
+  logVal("MS5 2: sideways drift m = ", dy);
+  logMsg("MS5 2: done");
+}
+// Sub-task 3: three 90 deg turns in place (counter-clockwise), timed.
+static void ms5Turn() {
+  if (!ms5SimLineUp()) return;
+  unsigned long turnMs = MS5_SIM_TURN90_MS;
+  ms5StartCountdown();
+  for (int i = 1; i <= 3; i++) {
+    float th0 = Enes100.getTheta();
+    logVal("MS5 3: turn ", i);
+    setDrive(-DRIVE_PWM, DRIVE_PWM);
+    delay(turnMs);
+    stopDrive();
+    delay(MS5_TURN_PAUSE_MS);
+    logVal("MS5 3:   turned deg = ", wrapAngle(Enes100.getTheta() - th0) * 180.0 / PI);
+  }
+  logMsg("MS5 3: done");
+}
+// Sub-task 10: mission actuation. Robot: runs on any Serial key, repeatable.
+// Sim (no Serial): runs once.
+static void ms5ActuateOnce() {
+  logMsg("MS5 10: arm down");
+  armDown();
+  delay(MS5_ARM_HOLD_MS);
+  logMsg("MS5 10: pump on");
+  pumpRunMs(TEST_PUMP_CHECK_MS);
+  logMsg("MS5 10: pump off then arm stow");
+  armStow();
+}
 // ---------------- Simulator demos (vision) ----------------
 // Sub-task 4: wireless receive. Prints pose while spinning slowly so
 // theta visibly changes.
@@ -807,6 +882,43 @@ static void ms5Detour() {
     driveTo(sidestepX, laneY(gLane), POS_TOL_M);
     turnTo(0.0);
   }
+}
+// Sub-task 8 (sim version): the Tank's front distance sensor while creeping
+// at the west wall, next to the true distance from vision. Stops when the
+// reading drops under SIM_OBSTACLE_THRESH_M (the threshold the nav uses).
+unsigned long gSensePrintMs = 0;
+static void ms5Sense() {
+  logMsg("MS5 8: obstacle sensor vs true distance from vision");
+  if (!waitForVision(VISION_START_MS)) {
+    logMsg("MS5 8: no vision, aborting");
+    return;
+  }
+  driveTo(MS5_SENSE_START_X, ARENA_MID_Y, POS_TOL_M);
+  turnTo(PI);
+  logVal("MS5 8: stop threshold m = ", SIM_OBSTACLE_THRESH_M);
+  unsigned long start = millis();
+  gSensePrintMs = 0;
+  while (millis() - start < MS5_SENSE_TIMEOUT_MS) {
+    float d = Tank.readDistanceSensor(SIM_OBSTACLE_SENSOR_ID);
+    // Wall at x = 0, sensor SIM_SENSOR_FRONT_M ahead of the marker.
+    float c = -cos(Enes100.getTheta());
+    float truth = (c > 0.5) ? Enes100.getX() / c - SIM_SENSOR_FRONT_M : -1;
+    bool stopNow = d > 0 && d < SIM_OBSTACLE_THRESH_M;
+    if (stopNow || millis() - gSensePrintMs >= MS5_PRINT_MS) {
+      gSensePrintMs = millis();
+      if (d > 0) logVal("MS5 8: sensor m = ", d); else logMsg("MS5 8: sensor m = none - no echo beyond 1 m");
+      logVal("MS5 8:  vision m = ", truth);
+    }
+    if (stopNow) {
+      stopDrive();
+      logMsg("MS5 8: obstacle -> stopped");
+      return;
+    }
+    setDrive(MS5_SENSE_PWM, MS5_SENSE_PWM);
+    delay(LOOP_MS);
+  }
+  stopDrive();
+  logMsg("MS5 8: timeout");
 }
 void runMs5() {
   if (gMs5Done) {

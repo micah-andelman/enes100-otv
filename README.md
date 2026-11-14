@@ -39,6 +39,7 @@ You don't need GitHub or any install beyond the Arduino IDE.
 | `otv/tests.ino` | Bench tests (TEST_MODE 1–7) |
 | `teammates/` | Teammate sketches as downloaded from Drive (read-only) |
 | `docs/bench-tests.md` | Bench test checklist |
+| `docs/ms5-demo-day.md` | MS5 demo day checklist (which command for each sub-task) |
 | `docs/aruco-marker-80.svg` | Printable vision marker |
 | `sim/otv_sim/otv_sim.ino` | Generated single file for the browser simulator |
 

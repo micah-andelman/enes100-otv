@@ -29,8 +29,8 @@ void runMission();
 #if !SIM
 bool colorIsPolluted(int r, int g, int b);  // shared by isPolluted() and bench test 5
 float pingMM(int trigPin, int echoPin);     // one HC-SR04 ping, -1 = no echo
-void pumpRunMs(unsigned long ms);           // pump on for a fixed time (bench test 2)
 #endif
+void pumpRunMs(unsigned long ms);  // pump on for a fixed time (bench test 2, MS5 10; sim: stub delay)
 
 // nav.ino
 void navSetup();

@@ -31,7 +31,7 @@ const CHROME_PATHS = [
   path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Microsoft\\Edge\\Application\\msedge.exe'),
 ];
 // Lines that mean the demo is over.
-const DONE = /Run complete|Stopped before the limbo|aborting|MS5 4: done|MS5 5: sent (un)?polluted|MS5 7b: past the obstacles|MS5 7b: (vision lost|timeout|every lane blocked|stopped)|STOPPED:|Program finished/;
+const DONE = /Run complete|Stopped before the limbo|aborting|MS5 (2|3|4|10): done|MS5 8: (obstacle -> stopped|timeout)|MS5 5: sent (un)?polluted|MS5 7b: past the obstacles|MS5 7b: (vision lost|timeout|every lane blocked|stopped)|STOPPED:|Program finished/;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const die = (msg) => { console.error('SIM AUTORUN FAILED: ' + msg); process.exit(1); };
@@ -203,7 +203,23 @@ const CHECKER = `
   }
 `;
 
+// Only one run may drive the sim window at a time (two runs reload and
+// reprogram the same tab under each other).
+const LOCK = path.join(PROFILE, 'otv-autorun.lock');
+function takeLock() {
+  fs.mkdirSync(PROFILE, { recursive: true });
+  try {
+    const pid = Number(fs.readFileSync(LOCK, 'utf8'));
+    if (pid && pid !== process.pid) {
+      try { process.kill(pid, 0); die(`another sim run is still going (process ${pid}). Wait for it, or close that PowerShell window.`); } catch (e) { if (e.code === 'EPERM') die(`another sim run is still going (process ${pid}).`); if (e.code !== 'ESRCH') throw e; }
+    }
+  } catch (e) { if (e.code !== 'ENOENT' && e.code !== 'ESRCH') throw e; }
+  fs.writeFileSync(LOCK, String(process.pid));
+  process.on('exit', () => { try { if (fs.readFileSync(LOCK, 'utf8') === String(process.pid)) fs.unlinkSync(LOCK); } catch {} });
+}
+
 async function main() {
+  takeLock();
   console.log('Opening the simulator (its own Chrome window)...');
   await startChrome();
   const tab = await simTab();
@@ -212,7 +228,20 @@ async function main() {
   await cdp.send('Page.bringToFront');
 
   // Speed must be "instant" (index 2). It is read at page load, so set it, then reload.
-  await cdp.eval(`localStorage.setItem('Editor.intervalIndex', '2'); localStorage.setItem('clearOutputWhenRun', 'true'); localStorage.setItem('resetRobotWhenRun', 'true'); 1`);
+  // A freshly opened (or reloading) tab is briefly a blank/placeholder
+  // document whose localStorage throws "Access is denied for this document"
+  // (seen 2026-11-14 on the first run from the OTV menu), so wait until the
+  // simulator page itself is loaded and retry.
+  let stored = false, lastErr = '';
+  for (let i = 0; i < 80 && !stored; i++) {
+    try {
+      stored = await cdp.eval(`(location.href.startsWith(${JSON.stringify(SIM_URL)}) && document.readyState === 'complete')
+        ? (localStorage.setItem('Editor.intervalIndex', '2'), localStorage.setItem('clearOutputWhenRun', 'true'), localStorage.setItem('resetRobotWhenRun', 'true'), true)
+        : false`, 2000);
+    } catch (e) { lastErr = e.message; stored = false; }
+    if (!stored) await sleep(250);
+  }
+  if (!stored) die('simulator page did not finish loading (internet?)' + (lastErr ? ': ' + lastErr : ''));
   await cdp.send('Page.reload', { ignoreCache: false });
   let ready = false;
   for (let i = 0; i < 80 && !ready; i++) {

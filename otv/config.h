@@ -36,8 +36,9 @@
 
 // MS5_TASK: 0 = normal build. Milestone 5 demos (tools/otv.ps1: otv2..otv10).
 // Numbers match the MS5 sub-tasks; 7a/7b are 71/72.
-// Simulator only: 4, 5, 6, 71, 72. Robot only: 2, 3, 10.
-// (otv8/otv9 reuse bench tests 7 and 4, so they have no MS5_TASK.)
+// Simulator only: 4, 5, 6, 71, 72, 8. Robot: 2, 3, 10 (these three also build
+// with SIM=1 as simulator dry runs: otv2sim, otv3sim, otv10sim).
+// Robot otv8/otv9 reuse bench tests 7 and 4; MS5_TASK 8 is the sim version of 8.
 #define MS5_NONE      0
 #define MS5_FORWARD   2   // robot: drive straight ~3.4 m, open loop (MS5_FORWARD_MS)
 #define MS5_TURN      3   // robot: three timed 90 deg turns in place
@@ -46,7 +47,8 @@
 #define MS5_NAV       6   // sim: start -> mission site -> just before the limbo
 #define MS5_WALLHUG   71  // sim 7a: full route (wall hug past the obstacles)
 #define MS5_DETOUR    72  // sim 7b: drive at an obstacle, detect it, detour around it
-#define MS5_ACTUATE   10  // robot: arm down, pump, arm stow (on Serial keypress)
+#define MS5_ACTUATE   10  // robot: arm down, pump, arm stow (on Serial keypress; sim: once)
+#define MS5_SENSE     8   // sim: front distance sensor vs vision while driving at a wall
 #ifndef MS5_TASK
 #define MS5_TASK MS5_NONE
 #endif
@@ -55,8 +57,8 @@
 #if TEST_MODE != TEST_NONE
 #error "Set MS5_TASK or TEST_MODE, not both."
 #endif
-#if SIM && !((MS5_TASK == MS5_RECEIVE) || (MS5_TASK == MS5_TRANSMIT) || (MS5_TASK == MS5_NAV) || (MS5_TASK == MS5_WALLHUG) || (MS5_TASK == MS5_DETOUR))
-#error "This MS5_TASK is robot only. Build with -DSIM=0."
+#if SIM && !((MS5_TASK == MS5_RECEIVE) || (MS5_TASK == MS5_TRANSMIT) || (MS5_TASK == MS5_NAV) || (MS5_TASK == MS5_WALLHUG) || (MS5_TASK == MS5_DETOUR) || (MS5_TASK == MS5_SENSE) || (MS5_TASK == MS5_FORWARD) || (MS5_TASK == MS5_TURN) || (MS5_TASK == MS5_ACTUATE))
+#error "Unknown MS5_TASK."
 #endif
 #if !SIM && !((MS5_TASK == MS5_FORWARD) || (MS5_TASK == MS5_TURN) || (MS5_TASK == MS5_ACTUATE))
 #error "This MS5_TASK is simulator only (SIM=1)."
@@ -296,7 +298,11 @@ const unsigned long TEST_VISION_MS     = 250;
 #ifndef MS5_TURN90_MS
 #define MS5_TURN90_MS 1900    // [MEASURE] spin-in-place time for 90 deg at DRIVE_PWM
 #endif
+#if SIM
+const unsigned long MS5_START_DELAY_MS = 1000;  // sim dry runs of 2/3: nobody needs to step back
+#else
 const unsigned long MS5_START_DELAY_MS = 5000;  // robot demos: time to step back after power-on
+#endif
 const unsigned long MS5_TURN_PAUSE_MS  = 2000;  // between the three turns
 const unsigned long MS5_PRINT_MS       = 500;   // receive demo: between pose prints
 const int           MS5_RECEIVE_PRINTS = 20;    // receive demo: number of pose prints
@@ -312,3 +318,13 @@ const float MS5_DETOUR_END_X   = 2.8;   // past both obstacle columns
 // so the turns in place never sweep into a column.
 const float MS5_SIDESTEP_GAP_M = 0.3;
 const unsigned long MS5_DETOUR_TIMEOUT_MS = 90000;
+
+// Simulator dry runs of the robot demos (otv2sim, otv3sim, otv8sim, otv10sim).
+// The sim Tank is faster than the OTV: v = PWM/510 m/s, w = 2*PWM/255 rad/s
+// when spinning in place at +/-PWM (CLAUDE.md, read from the sim JS).
+const float SIM_DRIVE_MPS           = DRIVE_PWM / 510.0;
+const unsigned long MS5_SIM_TURN90_MS = (unsigned long)(1000.0 * (PI / 2) / (2.0 * DRIVE_PWM / 255.0));  // ~1430 ms
+const float MS5_SIM_FORWARD_END_X   = 3.2;   // 2 dry run: stop before the limbo (x ~3.4), treads included
+const float MS5_SENSE_START_X       = 1.2;   // 8 sim: open floor between the start squares and column 1
+const int   MS5_SENSE_PWM           = 50;    // 8 sim: creep at ~0.1 m/s toward the west wall
+const unsigned long MS5_SENSE_TIMEOUT_MS = 20000;

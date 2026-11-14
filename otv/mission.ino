@@ -12,6 +12,7 @@ void armDown() { delay(SIM_ARM_MS); }
 void armStow() { delay(SIM_ARM_MS); }
 
 void pumpDispenseML(float ml) { delay(SIM_PUMP_MS); }
+void pumpRunMs(unsigned long ms) { delay(SIM_PUMP_MS); }
 
 float readDistanceMM() { return -1; }
 

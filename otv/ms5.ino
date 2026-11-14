@@ -6,38 +6,93 @@ bool gMs5Done = false;  // global: the simulator resets static locals
 
 #if MS5_TASK != MS5_NONE
 
-// ---------------- Robot demos (no vision) ----------------
-#if !SIM
+// ---------------- Robot demos 2, 3, 10 ----------------
+// The robot runs these blind (no vision). With SIM=1 they are simulator dry
+// runs of the same code: the sim lines up with vision first (the team does
+// that by hand on the robot) and reports what vision saw afterwards.
 
 static void ms5StartCountdown() {
   logVal("MS5 demo starts in ms: ", MS5_START_DELAY_MS);
   delay(MS5_START_DELAY_MS);
 }
 
+#if SIM
+// Face +x from wherever Randomize put the Tank (the robot is placed that way).
+static bool ms5SimLineUp() {
+  if (!waitForVision(VISION_START_MS)) {
+    logMsg("MS5: no vision, aborting");
+    return false;
+  }
+  return turnTo(0.0);
+}
+#endif
+
 // Sub-task 2: forward locomotion. Straight, open loop, longer than 3.4 m.
 static void ms5Forward() {
+#if SIM
+  if (!ms5SimLineUp()) return;
+  float x0 = Enes100.getX();
+  float y0 = Enes100.getY();
+  // The sim Tank is 3.5x faster: drive for the time that ends before the limbo.
+  unsigned long ms = (unsigned long)(1000.0 * (MS5_SIM_FORWARD_END_X - x0) / SIM_DRIVE_MPS);
+#else
+  unsigned long ms = MS5_FORWARD_MS;
+#endif
   ms5StartCountdown();
-  logVal("MS5 2: driving forward, ms = ", MS5_FORWARD_MS);
+  logVal("MS5 2: driving forward for ms = ", ms);
   setDrive(DRIVE_PWM, DRIVE_PWM);
-  delay(MS5_FORWARD_MS);
+  delay(ms);
   stopDrive();
   logMsg("MS5 2: stopped");
+#if SIM
+  delay(MS5_PRINT_MS);
+  float dx = Enes100.getX() - x0;
+  float dy = Enes100.getY() - y0;
+  logPose("MS5 2: end pose");
+  logVal("MS5 2: distance m = ", sqrt(dx * dx + dy * dy));
+  logVal("MS5 2: sideways drift m = ", dy);
+  logMsg("MS5 2: done");
+#endif
 }
 
 // Sub-task 3: three 90 deg turns in place (counter-clockwise), timed.
 static void ms5Turn() {
+#if SIM
+  if (!ms5SimLineUp()) return;
+  unsigned long turnMs = MS5_SIM_TURN90_MS;
+#else
+  unsigned long turnMs = MS5_TURN90_MS;
+#endif
   ms5StartCountdown();
   for (int i = 1; i <= 3; i++) {
+#if SIM
+    float th0 = Enes100.getTheta();
+#endif
     logVal("MS5 3: turn ", i);
     setDrive(-DRIVE_PWM, DRIVE_PWM);
-    delay(MS5_TURN90_MS);
+    delay(turnMs);
     stopDrive();
     delay(MS5_TURN_PAUSE_MS);
+#if SIM
+    logVal("MS5 3:   turned deg = ", wrapAngle(Enes100.getTheta() - th0) * 180.0 / PI);
+#endif
   }
   logMsg("MS5 3: done");
 }
 
-// Sub-task 10: mission actuation. Runs on any Serial key, repeatable.
+// Sub-task 10: mission actuation. Robot: runs on any Serial key, repeatable.
+// Sim (no Serial): runs once.
+static void ms5ActuateOnce() {
+  logMsg("MS5 10: arm down");
+  armDown();
+  delay(MS5_ARM_HOLD_MS);
+  logMsg("MS5 10: pump on");
+  pumpRunMs(TEST_PUMP_CHECK_MS);
+  logMsg("MS5 10: pump off then arm stow");
+  armStow();
+}
+
+#if !SIM
 static void ms5Actuate() {
   if (!gMs5Done) {
     logMsg("MS5 10: press Enter to run arm down -> pump -> arm stow");
@@ -45,17 +100,10 @@ static void ms5Actuate() {
   }
   if (!Serial.available()) return;
   while (Serial.available()) Serial.read();
-  logMsg("MS5 10: arm down");
-  armDown();
-  delay(MS5_ARM_HOLD_MS);
-  logMsg("MS5 10: pump on");
-  pumpRunMs(TEST_PUMP_CHECK_MS);
-  logMsg("MS5 10: pump off, arm stow");
-  armStow();
+  ms5ActuateOnce();
   logMsg("MS5 10: done. Press Enter to run again");
 }
-
-#endif  // !SIM
+#endif
 
 // ---------------- Simulator demos (vision) ----------------
 #if SIM
@@ -172,10 +220,49 @@ static void ms5Detour() {
   }
 }
 
+// Sub-task 8 (sim version): the Tank's front distance sensor while creeping
+// at the west wall, next to the true distance from vision. Stops when the
+// reading drops under SIM_OBSTACLE_THRESH_M (the threshold the nav uses).
+unsigned long gSensePrintMs = 0;
+
+static void ms5Sense() {
+  logMsg("MS5 8: obstacle sensor vs true distance from vision");
+  if (!waitForVision(VISION_START_MS)) {
+    logMsg("MS5 8: no vision, aborting");
+    return;
+  }
+  driveTo(MS5_SENSE_START_X, ARENA_MID_Y, POS_TOL_M);
+  turnTo(PI);
+  logVal("MS5 8: stop threshold m = ", SIM_OBSTACLE_THRESH_M);
+  unsigned long start = millis();
+  gSensePrintMs = 0;
+  while (millis() - start < MS5_SENSE_TIMEOUT_MS) {
+    float d = Tank.readDistanceSensor(SIM_OBSTACLE_SENSOR_ID);
+    // Wall at x = 0, sensor SIM_SENSOR_FRONT_M ahead of the marker.
+    float c = -cos(Enes100.getTheta());
+    float truth = (c > 0.5) ? Enes100.getX() / c - SIM_SENSOR_FRONT_M : -1;
+    bool stopNow = d > 0 && d < SIM_OBSTACLE_THRESH_M;
+    if (stopNow || millis() - gSensePrintMs >= MS5_PRINT_MS) {
+      gSensePrintMs = millis();
+      if (d > 0) logVal("MS5 8: sensor m = ", d); else logMsg("MS5 8: sensor m = none - no echo beyond 1 m");
+      logVal("MS5 8:  vision m = ", truth);
+    }
+    if (stopNow) {
+      stopDrive();
+      logMsg("MS5 8: obstacle -> stopped");
+      return;
+    }
+    setDrive(MS5_SENSE_PWM, MS5_SENSE_PWM);
+    delay(LOOP_MS);
+  }
+  stopDrive();
+  logMsg("MS5 8: timeout");
+}
+
 #endif  // SIM
 
 void runMs5() {
-#if MS5_TASK == MS5_ACTUATE
+#if (MS5_TASK == MS5_ACTUATE) && !SIM
   ms5Actuate();
 #else
   if (gMs5Done) {
@@ -198,9 +285,14 @@ void runMs5() {
   runFullRun();
 #elif MS5_TASK == MS5_DETOUR
   ms5Detour();
+#elif MS5_TASK == MS5_SENSE
+  ms5Sense();
+#elif MS5_TASK == MS5_ACTUATE
+  ms5ActuateOnce();
+  logMsg("MS5 10: done");
 #endif
   stopDrive();
-#endif  // MS5_ACTUATE
+#endif  // MS5_ACTUATE && !SIM
 }
 
 #endif  // MS5_TASK != MS5_NONE
