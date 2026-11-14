@@ -87,11 +87,13 @@ static void ms5Transmit() {
 }
 
 // Sub-task 7b: drive down a lane at the obstacles. When the distance
-// sensor sees one: stop, back up, sidestep to the nearest untried lane,
-// face +x, and continue until past both columns.
+// sensor sees one: stop, move to the middle of the open space before that
+// column, sidestep to the nearest untried lane, face +x, and continue until
+// past both columns. Turns in place only happen in those open spaces
+// (>= MS5_SIDESTEP_GAP_M from any column), so the body never sweeps a column.
 int gLane = 1;          // 0 low, 1 mid, 2 high
-int gLaneTried = 0;     // bit per lane tried in the current column
-float gBlockX = -1;     // x where the last block happened (-1 = none)
+int gLaneTried = 0;     // bit per lane tried at the current column
+float gBlockX = -1;     // right edge of the column that blocked us (-1 = none)
 
 static float laneY(int lane) {
   if (lane == 0) return MS5_LANE_LOW_Y;
@@ -107,7 +109,7 @@ static int nearestLane(float y) {
   return best;
 }
 
-// Nearest lane not tried yet in this column, or -1.
+// Nearest lane not tried yet at this column, or -1.
 static int nextLane() {
   int best = -1;
   for (int i = 0; i < 3; i++) {
@@ -132,59 +134,41 @@ static void ms5Detour() {
 
   unsigned long start = millis();
   while (true) {
-    if (!waitForVision(VISION_LOST_MS)) {
-      stopDrive();
-      logMsg("MS5 7b: vision lost");
-      return;
-    }
-    if (millis() - start >= MS5_DETOUR_TIMEOUT_MS) {
+    unsigned long used = millis() - start;
+    if (used >= MS5_DETOUR_TIMEOUT_MS) {
       stopDrive();
       logMsg("MS5 7b: timeout");
       return;
     }
-    float x = Enes100.getX();
-    if (x >= MS5_DETOUR_END_X) {
-      stopDrive();
+    int r = followLine(laneY(gLane), MS5_DETOUR_END_X, FOLLOW_PWM, true, MS5_DETOUR_TIMEOUT_MS - used);
+    if (r == FOLLOW_DONE) {
       logPose("MS5 7b: past the obstacles");
       return;
     }
-    if (gBlockX >= 0 && x > gBlockX + MS5_LANE_CLEAR_M) {
-      gLaneTried = 0;  // past that column: any lane may be blocked differently ahead
-      gBlockX = -1;
+    if (r == FOLLOW_FAILED) {
+      logMsg("MS5 7b: stopped (see the line above)");
+      return;
     }
 
-    if (obstacleAhead()) {
-      stopDrive();
-      logPose("MS5 7b: obstacle encountered");
-      setDrive(-DRIVE_PWM, -DRIVE_PWM);
-      delay(OBSTACLE_BACKUP_MS);
-      stopDrive();
-      gLaneTried |= (1 << gLane);
-      gBlockX = x;
-      int next = nextLane();
-      if (next < 0) {
-        logMsg("MS5 7b: every lane blocked, giving up");
-        return;
-      }
-      gLane = next;
-      logVal("MS5 7b: detour to lane y = ", laneY(gLane));
-      waitForVision(VISION_LOST_MS);
-      driveTo(Enes100.getX(), laneY(gLane), POS_TOL_M);
-      turnTo(0.0);
-      continue;
+    // Blocked. The column ahead is the first one whose left edge is past us.
+    float x = Enes100.getX();
+    logPose("MS5 7b: obstacle encountered");
+    float colLeft = (x < OBST_COL1_X - OBST_HALF_W) ? OBST_COL1_X - OBST_HALF_W : OBST_COL2_X - OBST_HALF_W;
+    float colRight = colLeft + 2 * OBST_HALF_W;
+    if (gBlockX >= 0 && colRight > gBlockX + 0.01) gLaneTried = 0;  // a new column: every lane is open again
+    gBlockX = colRight;
+    gLaneTried |= (1 << gLane);
+    int next = nextLane();
+    if (next < 0) {
+      logMsg("MS5 7b: every lane blocked, giving up");
+      return;
     }
-
-    // Follow the lane, steering back toward it like hugWall does.
-    float target = atan(WALL_HUG_GAIN * (laneY(gLane) - Enes100.getY()));
-    float err = wrapAngle(target - Enes100.getTheta());
-    if (fabs(err) > REALIGN_RAD) {
-      stopDrive();
-      turnTo(target);
-      continue;
-    }
-    int correction = (int)(HEADING_GAIN * err);
-    setDrive(DRIVE_PWM - correction, DRIVE_PWM + correction);
-    delay(LOOP_MS);
+    float sidestepX = colLeft - MS5_SIDESTEP_GAP_M;
+    moveToX(sidestepX);
+    gLane = next;
+    logVal("MS5 7b: detour to lane y = ", laneY(gLane));
+    driveTo(sidestepX, laneY(gLane), POS_TOL_M);
+    turnTo(0.0);
   }
 }
 

@@ -2,8 +2,9 @@
 // setup() and loop() live here. Subsystem code lives in drive.ino,
 // mission.ino, nav.ino, tests.ino. Pins/limits/tunables live in config.h.
 //
-// Build target: -DSIM=1 (default, browser simulator) or -DSIM=0 (robot).
-// Bench tests: -DSIM=0 -DTEST_MODE=1..6 (see config.h).
+// Build target: -DSIM=1 (default: browser simulator, or the physical ENES100
+// Tank on its Mega) or -DSIM=0 (robot).
+// Bench tests: -DSIM=0 -DTEST_MODE=1..7. MS5 demos: -DMS5_TASK=n (see config.h).
 #include <Enes100.h>
 #include "config.h"
 #include "otv.h"

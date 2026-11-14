@@ -44,6 +44,13 @@ bool obstacleAhead();
 bool turnTo(float heading);
 bool driveTo(float x, float y, float stopDistance);
 bool hugWall(float xEnd);
+// followLine() results
+const int FOLLOW_DONE    = 0;  // reached xEnd
+const int FOLLOW_BLOCKED = 1;  // front sensor saw an obstacle (stopped)
+const int FOLLOW_FAILED  = 2;  // vision lost or timeout (stopped)
+int followLine(float lineY, float xEnd, int pwm, bool watchObstacles, unsigned long timeoutMs);
+bool moveToX(float xTarget);
+unsigned long legTimeoutMs(float distM);
 void logPose(const char *label);
 void runFullRun();
 void runRoute(bool toGoal);  // false = stop just before the limbo (MS5 sub-task 6)

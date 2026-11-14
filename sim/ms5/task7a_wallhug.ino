@@ -14,7 +14,8 @@
 // real robot/arena and update it here.
 // ============================================================
 // ---- Build flags (override on the compiler command line) ----
-// SIM: 1 = ENES100 browser simulator (Tank library)
+// SIM: 1 = Tank library: ENES100 browser simulator, or the physical
+//          ENES100 Tank (Mega)
 //      0 = real robot (DRV8871 drivers)
 // TEST_MODE: 0 = full mission. Robot-only bench tests:
 // MS5_TASK: 0 = normal build. Milestone 5 demos (tools/otv.ps1: otv2..otv10).
@@ -42,12 +43,25 @@ const bool LEFT_INVERT = false; // [MEASURE] flip if left wheel runs backward
 const bool RIGHT_INVERT = false; // [MEASURE] flip if right wheel runs backward
 // ---- Navigation tuning ----
 const int DRIVE_PWM = 140; // straight-line drive PWM
+// followLine PWM (wall hug, descent to the limbo lane, last leg, 7b lanes).
+// The hug gap leaves ~2.5 cm each side of the sim Tank, so it must track tightly.
+const int FOLLOW_PWM = 70; // sim Tank: v = PWM/510 m/s, so 140 = 0.27 m/s (3.5x the robot) overshoots the line; tuned with otvsimcheck
 const int MIN_TURN_PWM = 70; // [MEASURE] lowest PWM that still turns in place
 const float TURN_GAIN = 120.0; // turn PWM per rad of heading error
 const float HEADING_GAIN = 150.0; // drive correction PWM per rad of heading error
 const float TURN_TOL_RAD = 0.08; // turnTo done inside this error
 const float REALIGN_RAD = 0.50; // driveTo stops and turns in place above this error
+// followLine (wall hug, descent to the limbo lane, last leg, 7b lanes) steers
+// back onto its line at most MAX_MERGE_RAD off +x, and only stops to turn in
+// place above FOLLOW_REALIGN_RAD, so it never spins next to a wall or column.
+const float MAX_MERGE_RAD = 0.60; // tune with otvsimcheck
+const float FOLLOW_REALIGN_RAD = 1.20;
 const float POS_TOL_M = 0.05; // waypoint reached inside this distance
+// driveTo slows down inside APPROACH_SLOW_M of its target, to no less than
+// APPROACH_MIN_PWM. The sim Tank at DRIVE_PWM moves ~12 cm per loop pass and
+// overshot the hug staging point by up to 9 cm (then spun into the wall).
+const float APPROACH_SLOW_M = 0.30;
+const int APPROACH_MIN_PWM = 50; // browser sim (tuned with otvsimcheck)
 const unsigned long LOOP_MS = 20;
 const unsigned long VISION_LOST_MS = 6000; // Tank testing: tolerate marker flicker near the arena edge
 const unsigned long WIFI_CONNECT_MS = 30000; // R4 begin() returns before WiFi connects (chosen, not specified)
@@ -55,7 +69,18 @@ const unsigned long VISION_START_MS = 10000; // give up the run if no marker at 
 const unsigned long MOVE_TIMEOUT_MS = 15000; // per turnTo call; driveTo adds travel time below
 const float DRIVE_SPEED_MPS = 0.075; // [MEASURE] MS2 operating speed 7.54 cm/s; sizes driveTo timeouts
 const unsigned long BACKUP_MS = 800; // reverse time after the mission
+// ---- Footprint: everything the OTV must keep inside the arena ----
+// Half sizes of the whole body (wheels included), centered on the marker.
+// Browser simulator Tank as it is DRAWN (sim JS): body 0.15 x 0.12 m, but
+// the treads are drawn 0.18 m long and out to +/-0.10 m. The sim only keeps
+// the 0.15 x 0.12 body inside the walls, so the treads can poke out 4 cm.
+const float OTV_HALF_WIDTH_M = 0.10;
+const float OTV_HALF_LENGTH_M = 0.09;
+const float OTV_TURN_RADIUS_M = 0.135; // half diagonal: sqrt(0.10^2 + 0.09^2)
+const float WALL_TURN_MARGIN_M = 0.07; // clearance kept when turning in place near a wall (covers a few cm of stop overshoot)
 // ---- Arena (vision frame: x 0..4 m, y 0..2 m) ----
+const float ARENA_W = 4.0;
+const float ARENA_H = 2.0;
 // Source: official "Arena Details" doc (ENES100 course drive) diagram.
 // Zones along x: landing/mission 0-0.8, obstacles 0.8-2.8, open 2.8-3.4,
 // limbo/log at ~3.4, goal 3.4-4.0.
@@ -72,21 +97,25 @@ const float MISSION_STOP_DIST = 0.30; // [MEASURE] tune so the OTV front ends wi
 // drop to the limbo lane. Limbo spans the top half (y 1.0-2.0) with 22 cm
 // walls under each end, so the opening is y 1.22-1.78.
 const float WALL_HUG_Y = 1.875; // center of the top gap (y 1.75-2.0, doc)
-const float WALL_HUG_GAIN = 3.0; // aim-back angle (rad) per m off the hug line (tune)
-// Staging point for the wall hug: turn to +x here, well away from the wall
-// (turning in place 12.5 cm from the wall swings the OTV's corner into it),
-// then hugWall curves up onto WALL_HUG_Y before column 1 (x 1.4-1.6).
-// Kept clear of the top mission site (pool at ~(0.5, 1.5)).
+const float WALL_HUG_GAIN = 5.0; // aim-back angle (rad) per m off the line (followLine); tuned with otvsimcheck
+// Staging point for the wall hug: the OTV drives up the x = HUG_STAGE_X
+// line (0.3 m right of the pool centers, clear of the top mission site),
+// turns to +x at HUG_STAGE_Y, then hugWall merges onto WALL_HUG_Y before
+// column 1 (x 1.4-1.6). HUG_STAGE_Y is as close to the hug line as a turn
+// in place allows: its turning circle stays WALL_TURN_MARGIN_M off the wall.
+// (Turning in place 12.5 cm from the wall swung the physical Tank into it.)
 const float HUG_STAGE_X = 0.8; // [MEASURE]
-const float HUG_STAGE_Y = 1.65; // [MEASURE]
-const float HUG_END_X = 2.7; // [MEASURE] leave the hug line after column 2 (x 2.2-2.4)
+const float HUG_STAGE_Y = ARENA_H - OTV_TURN_RADIUS_M - WALL_TURN_MARGIN_M; // sim 1.795, robot 1.76
+// Leave the hug line once the whole body is past column 2 (right edge 2.4),
+// then followLine curves down to the limbo lane (no turn in place by the wall).
+const float HUG_END_X = 2.55; // [MEASURE] 2.4 + half length + 6 cm
 const float LIMBO_ALIGN_X = 3.0; // [MEASURE] be on the limbo lane by here (open zone 2.8-3.4)
 const float LIMBO_LANE_Y = 1.5; // center of the limbo opening (doc)
 const float GOAL_X = 3.7; // center of the goal zone 3.4-4.0 (doc)
 const unsigned long HUG_TIMEOUT_MS = 40000; // [MEASURE] 1.7 m hug at ~7 cm/s on the robot
 // If the limbo rod hides the marker on the last leg, drive straight for the
 // remaining distance (from the last seen x and DRIVE_SPEED_MPS), capped here.
-const unsigned long LIMBO_BLIND_MAX_MS = 12000; // chosen: ~0.9 m at 7.5 cm/s
+const unsigned long LIMBO_BLIND_MAX_MS = 6500; // chosen: ~0.5 m at 7.5 cm/s, so it can't reach the east wall from the limbo
 // ---- Obstacle safety stop (MS2 nav flow: front sensor sees obstacle ->
 // stop, back up, re-route with vision). Off for the pool approach, since
 // the pool is straight ahead there.
@@ -160,7 +189,10 @@ const float MS5_LANE_MID_Y = 1.0;
 const float MS5_LANE_HIGH_Y = 1.5;
 const float MS5_DETOUR_START_X = 0.9; // line up on a lane here (just before column 1 at x 1.4)
 const float MS5_DETOUR_END_X = 2.8; // past both obstacle columns
-const float MS5_LANE_CLEAR_M = 0.6; // this far past where it was blocked, reset the tried lanes (next column)
+// After a block, back up / creep to the middle of the open space before that
+// column (x 1.1 before column 1, 1.9 between the columns) before sidestepping,
+// so the turns in place never sweep into a column.
+const float MS5_SIDESTEP_GAP_M = 0.3;
 const unsigned long MS5_DETOUR_TIMEOUT_MS = 90000;
 // ===================== otv/otv.h =====================
 // Prototypes for every function shared across tabs.
@@ -198,6 +230,13 @@ bool obstacleAhead();
 bool turnTo(float heading);
 bool driveTo(float x, float y, float stopDistance);
 bool hugWall(float xEnd);
+// followLine() results
+const int FOLLOW_DONE = 0; // reached xEnd
+const int FOLLOW_BLOCKED = 1; // front sensor saw an obstacle (stopped)
+const int FOLLOW_FAILED = 2; // vision lost or timeout (stopped)
+int followLine(float lineY, float xEnd, int pwm, bool watchObstacles, unsigned long timeoutMs);
+bool moveToX(float xTarget);
+unsigned long legTimeoutMs(float distM);
 void logPose(const char *label);
 void runFullRun();
 void runRoute(bool toGoal); // false = stop just before the limbo (MS5 sub-task 6)
@@ -210,8 +249,9 @@ void runMs5();
 // setup() and loop() live here. Subsystem code lives in drive.ino,
 // mission.ino, nav.ino, tests.ino. Pins/limits/tunables live in config.h.
 //
-// Build target: -DSIM=1 (default, browser simulator) or -DSIM=0 (robot).
-// Bench tests: -DSIM=0 -DTEST_MODE=1..6 (see config.h).
+// Build target: -DSIM=1 (default: browser simulator, or the physical ENES100
+// Tank on its Mega) or -DSIM=0 (robot).
+// Bench tests: -DSIM=0 -DTEST_MODE=1..7. MS5 demos: -DMS5_TASK=n (see config.h).
 bool gVisionStarted = false;
 bool gRunDone = false; // global, not a static local (the simulator resets those)
 void setup() {
@@ -395,18 +435,6 @@ bool obstacleAhead() {
   float r = SIM_SENSOR_FRONT_M + d;
   return inObstacleField(Enes100.getX() + r * cos(th), Enes100.getY() + r * sin(th));
 }
-// MS2 safety stop: if the front sensor sees something, stop and back up.
-// The caller re-aims from the vision position on its next loop.
-// Returns true if it backed off.
-static bool backOffIfBlocked() {
-  if (!obstacleAhead()) return false;
-  stopDrive();
-  logMsg("Obstacle ahead: backing up");
-  setDrive(-DRIVE_PWM, -DRIVE_PWM);
-  delay(OBSTACLE_BACKUP_MS);
-  stopDrive();
-  return true;
-}
 // ---------------- Moves ----------------
 // Turn in place to an absolute heading. PWM is proportional to the
 // heading error, clamped to MIN_TURN_PWM..MAX_PWM.
@@ -461,7 +489,8 @@ bool driveTo(float x, float y, float stopDistance) {
     gLastX = Enes100.getX();
     float dx = x - gLastX;
     float dy = y - Enes100.getY();
-    if (sqrt(dx * dx + dy * dy) <= stopDistance) {
+    float dist = sqrt(dx * dx + dy * dy);
+    if (dist <= stopDistance) {
       stopDrive();
       return true;
     }
@@ -475,55 +504,121 @@ bool driveTo(float x, float y, float stopDistance) {
       }
       continue;
     }
+    // Slow down near the target so it stops where it should (see APPROACH_SLOW_M).
+    int pwm = constrain((int)(DRIVE_PWM * (dist - stopDistance) / APPROACH_SLOW_M), APPROACH_MIN_PWM, DRIVE_PWM);
     int correction = (int)(HEADING_GAIN * err);
-    setDrive(DRIVE_PWM - correction, DRIVE_PWM + correction);
+    setDrive(pwm - correction, pwm + correction);
     delay(LOOP_MS);
   }
 }
-// Drive +x along the top wall at WALL_HUG_Y until x >= xEnd, passing
-// every obstacle through the obstacle-to-wall gap. Steers back toward
-// the hug line in proportion to how far off it the OTV is.
-// This is the only leg that passes the obstacle columns, so it is the only
-// one that runs the front-sensor safety stop (the other legs head at the
-// pool or an arena wall, which the front sensor would read as an obstacle).
+// Expected time for a leg of distM meters, plus slack (sized for the slow robot).
+unsigned long legTimeoutMs(float distM) {
+  return MOVE_TIMEOUT_MS + (unsigned long)(1000.0 * fabs(distM) / DRIVE_SPEED_MPS);
+}
+// Drive +x along the horizontal line y = lineY until x >= xEnd.
+// Steers back toward the line in proportion to how far off it the OTV is,
+// but never more than MAX_MERGE_RAD off +x, and only turns in place if the
+// heading is badly off (FOLLOW_REALIGN_RAD). That keeps every merge (onto the
+// hug line, down to the limbo lane, between 7b lanes) a gentle curve instead
+// of a spin next to a wall or column.
+// watchObstacles: stop and return FOLLOW_BLOCKED when the front sensor sees
+// an obstacle (only legs that pass the obstacle columns use it: the other
+// legs head at the pool or a wall, which the sensor would also see).
+int followLine(float lineY, float xEnd, int pwm, bool watchObstacles, unsigned long timeoutMs) {
+  unsigned long start = millis();
+  while (true) {
+    if (!waitForVision(VISION_LOST_MS)) {
+      stopDrive();
+      logMsg("followLine: vision lost");
+      return FOLLOW_FAILED;
+    }
+    if (millis() - start >= timeoutMs) {
+      stopDrive();
+      logMsg("followLine: timeout");
+      return FOLLOW_FAILED;
+    }
+    gLastX = Enes100.getX();
+    if (gLastX >= xEnd) {
+      stopDrive();
+      return FOLLOW_DONE;
+    }
+    if (watchObstacles && obstacleAhead()) {
+      stopDrive();
+      return FOLLOW_BLOCKED;
+    }
+    float target = atan(WALL_HUG_GAIN * (lineY - Enes100.getY()));
+    target = constrain(target, -MAX_MERGE_RAD, MAX_MERGE_RAD);
+    float err = wrapAngle(target - Enes100.getTheta());
+    if (fabs(err) > FOLLOW_REALIGN_RAD) {
+      stopDrive();
+      if (!turnTo(target)) {
+        stopDrive();
+        return FOLLOW_FAILED;
+      }
+      continue;
+    }
+    int correction = (int)(HEADING_GAIN * err);
+    setDrive(pwm - correction, pwm + correction);
+    delay(LOOP_MS);
+  }
+}
+// Wall hug: follow WALL_HUG_Y through the obstacle-to-wall gap until
+// x >= xEnd. This is the only full-route leg that passes the obstacle
+// columns, so it is the only one that runs the MS2 front-sensor safety
+// stop: if blocked, back up and re-aim from vision, giving up after
+// MAX_OBSTACLE_HITS.
 bool hugWall(float xEnd) {
   unsigned long start = millis();
   int hits = 0;
   while (true) {
-    if (!waitForVision(VISION_LOST_MS)) {
-      stopDrive();
-      logMsg("hugWall: vision lost");
-      return false;
-    }
-    if (millis() - start >= HUG_TIMEOUT_MS) {
+    unsigned long used = millis() - start;
+    if (used >= HUG_TIMEOUT_MS) {
       stopDrive();
       logMsg("hugWall: timeout");
       return false;
     }
-    if (Enes100.getX() >= xEnd) {
+    int r = followLine(WALL_HUG_Y, xEnd, FOLLOW_PWM, true, HUG_TIMEOUT_MS - used);
+    if (r == FOLLOW_DONE) return true;
+    if (r == FOLLOW_FAILED) return false;
+    logMsg("Obstacle ahead: backing up");
+    setDrive(-DRIVE_PWM, -DRIVE_PWM);
+    delay(OBSTACLE_BACKUP_MS);
+    stopDrive();
+    hits++;
+    if (hits >= MAX_OBSTACLE_HITS) {
+      logMsg("hugWall: still blocked, giving up");
+      return false;
+    }
+  }
+}
+// Drive straight forward or backward (holding heading +x) until the vision
+// x is within POS_TOL_M of xTarget. Used by 7b to reach the middle of the
+// open space before a column without turning around.
+bool moveToX(float xTarget) {
+  unsigned long start = millis();
+  unsigned long timeoutMs = MOVE_TIMEOUT_MS;
+  if (Enes100.isVisible()) timeoutMs = legTimeoutMs(xTarget - Enes100.getX());
+  while (true) {
+    if (!waitForVision(VISION_LOST_MS)) {
+      stopDrive();
+      logMsg("moveToX: vision lost");
+      return false;
+    }
+    if (millis() - start >= timeoutMs) {
+      stopDrive();
+      logMsg("moveToX: timeout");
+      return false;
+    }
+    float dx = xTarget - Enes100.getX();
+    if (fabs(dx) <= POS_TOL_M) {
       stopDrive();
       return true;
     }
-    if (backOffIfBlocked()) {
-      hits++;
-      if (hits >= MAX_OBSTACLE_HITS) {
-        logMsg("hugWall: still blocked, giving up");
-        return false;
-      }
-      continue;
-    }
-    float target = atan(WALL_HUG_GAIN * (WALL_HUG_Y - Enes100.getY()));
-    float err = wrapAngle(target - Enes100.getTheta());
-    if (fabs(err) > REALIGN_RAD) {
-      stopDrive();
-      if (!turnTo(target)) {
-        stopDrive();
-        return false;
-      }
-      continue;
-    }
-    int correction = (int)(HEADING_GAIN * err);
-    setDrive(DRIVE_PWM - correction, DRIVE_PWM + correction);
+    // The heading correction (right minus left) turns the same way
+    // whether the wheels go forward or backward.
+    int correction = (int)(HEADING_GAIN * wrapAngle(0.0 - Enes100.getTheta()));
+    int pwm = dx > 0 ? DRIVE_PWM : -DRIVE_PWM;
+    setDrive(pwm - correction, pwm + correction);
     delay(LOOP_MS);
   }
 }
@@ -571,26 +666,30 @@ void runRoute(bool toGoal) {
   delay(BACKUP_MS);
   stopDrive();
   logPose("Pose after backup");
-  // Avoid all obstacles: turn to +x at a staging point away from the wall,
-  // then hugWall curves up onto the hug line and follows it past both columns.
+  // Avoid all obstacles: go to x = HUG_STAGE_X at mid height, drive up that
+  // line to the staging point (clear of the top pool), turn to +x there,
+  // then hugWall merges onto the hug line and follows it past both columns.
   logMsg("Wall hug start");
+  if (!driveTo(HUG_STAGE_X, ARENA_MID_Y, POS_TOL_M)) logMsg("Hug approach failed, continuing");
   if (!driveTo(HUG_STAGE_X, HUG_STAGE_Y, POS_TOL_M)) logMsg("Hug staging approach failed, continuing");
   logPose("Pose at hug start");
   turnTo(0.0);
   logPose("Pose after turn to +x");
   if (!hugWall(HUG_END_X)) logMsg("Wall hug failed, continuing");
   logPose("Pose after wall hug");
-  // Under the limbo (top half), never over the log.
+  // Curve down onto the limbo lane (top half: under the limbo, never over
+  // the log), then straight through the limbo to the goal.
   logMsg("Limbo");
-  driveTo(LIMBO_ALIGN_X, LIMBO_LANE_Y, POS_TOL_M);
+  followLine(LIMBO_LANE_Y, LIMBO_ALIGN_X, FOLLOW_PWM, false, legTimeoutMs(LIMBO_ALIGN_X - HUG_END_X + WALL_HUG_Y - LIMBO_LANE_Y));
   logPose("Pose at limbo align");
   if (!toGoal) {
     stopDrive();
     logMsg("Stopped before the limbo");
     return;
   }
-  turnTo(0.0);
-  if (!driveTo(GOAL_X, LIMBO_LANE_Y, POS_TOL_M)) finishBlindIfVisionLost();
+  if (followLine(LIMBO_LANE_Y, GOAL_X, FOLLOW_PWM, false, legTimeoutMs(GOAL_X - LIMBO_ALIGN_X)) != FOLLOW_DONE) {
+    finishBlindIfVisionLost();
+  }
   stopDrive();
   logPose("Pose at end");
   logMsg("Run complete");
@@ -631,11 +730,13 @@ static void ms5Transmit() {
   logMsg(SIM_POLLUTED ? "MS5 5: sent polluted" : "MS5 5: sent unpolluted");
 }
 // Sub-task 7b: drive down a lane at the obstacles. When the distance
-// sensor sees one: stop, back up, sidestep to the nearest untried lane,
-// face +x, and continue until past both columns.
+// sensor sees one: stop, move to the middle of the open space before that
+// column, sidestep to the nearest untried lane, face +x, and continue until
+// past both columns. Turns in place only happen in those open spaces
+// (>= MS5_SIDESTEP_GAP_M from any column), so the body never sweeps a column.
 int gLane = 1; // 0 low, 1 mid, 2 high
-int gLaneTried = 0; // bit per lane tried in the current column
-float gBlockX = -1; // x where the last block happened (-1 = none)
+int gLaneTried = 0; // bit per lane tried at the current column
+float gBlockX = -1; // right edge of the column that blocked us (-1 = none)
 static float laneY(int lane) {
   if (lane == 0) return MS5_LANE_LOW_Y;
   if (lane == 1) return MS5_LANE_MID_Y;
@@ -648,7 +749,7 @@ static int nearestLane(float y) {
   }
   return best;
 }
-// Nearest lane not tried yet in this column, or -1.
+// Nearest lane not tried yet at this column, or -1.
 static int nextLane() {
   int best = -1;
   for (int i = 0; i < 3; i++) {
@@ -671,57 +772,40 @@ static void ms5Detour() {
   logPose("MS5 7b: lined up on lane");
   unsigned long start = millis();
   while (true) {
-    if (!waitForVision(VISION_LOST_MS)) {
-      stopDrive();
-      logMsg("MS5 7b: vision lost");
-      return;
-    }
-    if (millis() - start >= MS5_DETOUR_TIMEOUT_MS) {
+    unsigned long used = millis() - start;
+    if (used >= MS5_DETOUR_TIMEOUT_MS) {
       stopDrive();
       logMsg("MS5 7b: timeout");
       return;
     }
-    float x = Enes100.getX();
-    if (x >= MS5_DETOUR_END_X) {
-      stopDrive();
+    int r = followLine(laneY(gLane), MS5_DETOUR_END_X, FOLLOW_PWM, true, MS5_DETOUR_TIMEOUT_MS - used);
+    if (r == FOLLOW_DONE) {
       logPose("MS5 7b: past the obstacles");
       return;
     }
-    if (gBlockX >= 0 && x > gBlockX + MS5_LANE_CLEAR_M) {
-      gLaneTried = 0; // past that column: any lane may be blocked differently ahead
-      gBlockX = -1;
+    if (r == FOLLOW_FAILED) {
+      logMsg("MS5 7b: stopped (see the line above)");
+      return;
     }
-    if (obstacleAhead()) {
-      stopDrive();
-      logPose("MS5 7b: obstacle encountered");
-      setDrive(-DRIVE_PWM, -DRIVE_PWM);
-      delay(OBSTACLE_BACKUP_MS);
-      stopDrive();
-      gLaneTried |= (1 << gLane);
-      gBlockX = x;
-      int next = nextLane();
-      if (next < 0) {
-        logMsg("MS5 7b: every lane blocked, giving up");
-        return;
-      }
-      gLane = next;
-      logVal("MS5 7b: detour to lane y = ", laneY(gLane));
-      waitForVision(VISION_LOST_MS);
-      driveTo(Enes100.getX(), laneY(gLane), POS_TOL_M);
-      turnTo(0.0);
-      continue;
+    // Blocked. The column ahead is the first one whose left edge is past us.
+    float x = Enes100.getX();
+    logPose("MS5 7b: obstacle encountered");
+    float colLeft = (x < OBST_COL1_X - OBST_HALF_W) ? OBST_COL1_X - OBST_HALF_W : OBST_COL2_X - OBST_HALF_W;
+    float colRight = colLeft + 2 * OBST_HALF_W;
+    if (gBlockX >= 0 && colRight > gBlockX + 0.01) gLaneTried = 0; // a new column: every lane is open again
+    gBlockX = colRight;
+    gLaneTried |= (1 << gLane);
+    int next = nextLane();
+    if (next < 0) {
+      logMsg("MS5 7b: every lane blocked, giving up");
+      return;
     }
-    // Follow the lane, steering back toward it like hugWall does.
-    float target = atan(WALL_HUG_GAIN * (laneY(gLane) - Enes100.getY()));
-    float err = wrapAngle(target - Enes100.getTheta());
-    if (fabs(err) > REALIGN_RAD) {
-      stopDrive();
-      turnTo(target);
-      continue;
-    }
-    int correction = (int)(HEADING_GAIN * err);
-    setDrive(DRIVE_PWM - correction, DRIVE_PWM + correction);
-    delay(LOOP_MS);
+    float sidestepX = colLeft - MS5_SIDESTEP_GAP_M;
+    moveToX(sidestepX);
+    gLane = next;
+    logVal("MS5 7b: detour to lane y = ", laneY(gLane));
+    driveTo(sidestepX, laneY(gLane), POS_TOL_M);
+    turnTo(0.0);
   }
 }
 void runMs5() {

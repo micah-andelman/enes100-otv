@@ -139,19 +139,6 @@ bool obstacleAhead() {
 #endif
 }
 
-// MS2 safety stop: if the front sensor sees something, stop and back up.
-// The caller re-aims from the vision position on its next loop.
-// Returns true if it backed off.
-static bool backOffIfBlocked() {
-  if (!obstacleAhead()) return false;
-  stopDrive();
-  logMsg("Obstacle ahead: backing up");
-  setDrive(-DRIVE_PWM, -DRIVE_PWM);
-  delay(OBSTACLE_BACKUP_MS);
-  stopDrive();
-  return true;
-}
-
 // ---------------- Moves ----------------
 
 // Turn in place to an absolute heading. PWM is proportional to the
@@ -211,7 +198,8 @@ bool driveTo(float x, float y, float stopDistance) {
     gLastX = Enes100.getX();
     float dx = x - gLastX;
     float dy = y - Enes100.getY();
-    if (sqrt(dx * dx + dy * dy) <= stopDistance) {
+    float dist = sqrt(dx * dx + dy * dy);
+    if (dist <= stopDistance) {
       stopDrive();
       return true;
     }
@@ -227,60 +215,129 @@ bool driveTo(float x, float y, float stopDistance) {
       continue;
     }
 
+    // Slow down near the target so it stops where it should (see APPROACH_SLOW_M).
+    int pwm = constrain((int)(DRIVE_PWM * (dist - stopDistance) / APPROACH_SLOW_M), APPROACH_MIN_PWM, DRIVE_PWM);
     int correction = (int)(HEADING_GAIN * err);
-    setDrive(DRIVE_PWM - correction, DRIVE_PWM + correction);
+    setDrive(pwm - correction, pwm + correction);
     delay(LOOP_MS);
   }
 }
 
-// Drive +x along the top wall at WALL_HUG_Y until x >= xEnd, passing
-// every obstacle through the obstacle-to-wall gap. Steers back toward
-// the hug line in proportion to how far off it the OTV is.
-// This is the only leg that passes the obstacle columns, so it is the only
-// one that runs the front-sensor safety stop (the other legs head at the
-// pool or an arena wall, which the front sensor would read as an obstacle).
-bool hugWall(float xEnd) {
+// Expected time for a leg of distM meters, plus slack (sized for the slow robot).
+unsigned long legTimeoutMs(float distM) {
+  return MOVE_TIMEOUT_MS + (unsigned long)(1000.0 * fabs(distM) / DRIVE_SPEED_MPS);
+}
+
+// Drive +x along the horizontal line y = lineY until x >= xEnd.
+// Steers back toward the line in proportion to how far off it the OTV is,
+// but never more than MAX_MERGE_RAD off +x, and only turns in place if the
+// heading is badly off (FOLLOW_REALIGN_RAD). That keeps every merge (onto the
+// hug line, down to the limbo lane, between 7b lanes) a gentle curve instead
+// of a spin next to a wall or column.
+// watchObstacles: stop and return FOLLOW_BLOCKED when the front sensor sees
+// an obstacle (only legs that pass the obstacle columns use it: the other
+// legs head at the pool or a wall, which the sensor would also see).
+int followLine(float lineY, float xEnd, int pwm, bool watchObstacles, unsigned long timeoutMs) {
   unsigned long start = millis();
-  int hits = 0;
   while (true) {
     if (!waitForVision(VISION_LOST_MS)) {
       stopDrive();
-      logMsg("hugWall: vision lost");
-      return false;
+      logMsg("followLine: vision lost");
+      return FOLLOW_FAILED;
     }
-    if (millis() - start >= HUG_TIMEOUT_MS) {
+    if (millis() - start >= timeoutMs) {
       stopDrive();
-      logMsg("hugWall: timeout");
-      return false;
+      logMsg("followLine: timeout");
+      return FOLLOW_FAILED;
     }
 
-    if (Enes100.getX() >= xEnd) {
+    gLastX = Enes100.getX();
+    if (gLastX >= xEnd) {
       stopDrive();
-      return true;
+      return FOLLOW_DONE;
     }
 
-    if (backOffIfBlocked()) {
-      hits++;
-      if (hits >= MAX_OBSTACLE_HITS) {
-        logMsg("hugWall: still blocked, giving up");
-        return false;
-      }
-      continue;
+    if (watchObstacles && obstacleAhead()) {
+      stopDrive();
+      return FOLLOW_BLOCKED;
     }
 
-    float target = atan(WALL_HUG_GAIN * (WALL_HUG_Y - Enes100.getY()));
+    float target = atan(WALL_HUG_GAIN * (lineY - Enes100.getY()));
+    target = constrain(target, -MAX_MERGE_RAD, MAX_MERGE_RAD);
     float err = wrapAngle(target - Enes100.getTheta());
-    if (fabs(err) > REALIGN_RAD) {
+    if (fabs(err) > FOLLOW_REALIGN_RAD) {
       stopDrive();
       if (!turnTo(target)) {
         stopDrive();
-        return false;
+        return FOLLOW_FAILED;
       }
       continue;
     }
 
     int correction = (int)(HEADING_GAIN * err);
-    setDrive(DRIVE_PWM - correction, DRIVE_PWM + correction);
+    setDrive(pwm - correction, pwm + correction);
+    delay(LOOP_MS);
+  }
+}
+
+// Wall hug: follow WALL_HUG_Y through the obstacle-to-wall gap until
+// x >= xEnd. This is the only full-route leg that passes the obstacle
+// columns, so it is the only one that runs the MS2 front-sensor safety
+// stop: if blocked, back up and re-aim from vision, giving up after
+// MAX_OBSTACLE_HITS.
+bool hugWall(float xEnd) {
+  unsigned long start = millis();
+  int hits = 0;
+  while (true) {
+    unsigned long used = millis() - start;
+    if (used >= HUG_TIMEOUT_MS) {
+      stopDrive();
+      logMsg("hugWall: timeout");
+      return false;
+    }
+    int r = followLine(WALL_HUG_Y, xEnd, FOLLOW_PWM, true, HUG_TIMEOUT_MS - used);
+    if (r == FOLLOW_DONE) return true;
+    if (r == FOLLOW_FAILED) return false;
+    logMsg("Obstacle ahead: backing up");
+    setDrive(-DRIVE_PWM, -DRIVE_PWM);
+    delay(OBSTACLE_BACKUP_MS);
+    stopDrive();
+    hits++;
+    if (hits >= MAX_OBSTACLE_HITS) {
+      logMsg("hugWall: still blocked, giving up");
+      return false;
+    }
+  }
+}
+
+// Drive straight forward or backward (holding heading +x) until the vision
+// x is within POS_TOL_M of xTarget. Used by 7b to reach the middle of the
+// open space before a column without turning around.
+bool moveToX(float xTarget) {
+  unsigned long start = millis();
+  unsigned long timeoutMs = MOVE_TIMEOUT_MS;
+  if (Enes100.isVisible()) timeoutMs = legTimeoutMs(xTarget - Enes100.getX());
+  while (true) {
+    if (!waitForVision(VISION_LOST_MS)) {
+      stopDrive();
+      logMsg("moveToX: vision lost");
+      return false;
+    }
+    if (millis() - start >= timeoutMs) {
+      stopDrive();
+      logMsg("moveToX: timeout");
+      return false;
+    }
+    float dx = xTarget - Enes100.getX();
+    if (fabs(dx) <= POS_TOL_M) {
+      stopDrive();
+      return true;
+    }
+    // The heading correction (right minus left) turns the same way
+    // whether the wheels go forward or backward.
+    int correction = (int)(HEADING_GAIN * wrapAngle(0.0 - Enes100.getTheta()));
+    int pwm = dx > 0 ? DRIVE_PWM : -DRIVE_PWM;
+    setDrive(pwm - correction, pwm + correction);
     delay(LOOP_MS);
   }
 }
@@ -335,9 +392,11 @@ void runRoute(bool toGoal) {
   stopDrive();
   logPose("Pose after backup");
 
-  // Avoid all obstacles: turn to +x at a staging point away from the wall,
-  // then hugWall curves up onto the hug line and follows it past both columns.
+  // Avoid all obstacles: go to x = HUG_STAGE_X at mid height, drive up that
+  // line to the staging point (clear of the top pool), turn to +x there,
+  // then hugWall merges onto the hug line and follows it past both columns.
   logMsg("Wall hug start");
+  if (!driveTo(HUG_STAGE_X, ARENA_MID_Y, POS_TOL_M)) logMsg("Hug approach failed, continuing");
   if (!driveTo(HUG_STAGE_X, HUG_STAGE_Y, POS_TOL_M)) logMsg("Hug staging approach failed, continuing");
   logPose("Pose at hug start");
   turnTo(0.0);
@@ -345,17 +404,19 @@ void runRoute(bool toGoal) {
   if (!hugWall(HUG_END_X)) logMsg("Wall hug failed, continuing");
   logPose("Pose after wall hug");
 
-  // Under the limbo (top half), never over the log.
+  // Curve down onto the limbo lane (top half: under the limbo, never over
+  // the log), then straight through the limbo to the goal.
   logMsg("Limbo");
-  driveTo(LIMBO_ALIGN_X, LIMBO_LANE_Y, POS_TOL_M);
+  followLine(LIMBO_LANE_Y, LIMBO_ALIGN_X, FOLLOW_PWM, false, legTimeoutMs(LIMBO_ALIGN_X - HUG_END_X + WALL_HUG_Y - LIMBO_LANE_Y));
   logPose("Pose at limbo align");
   if (!toGoal) {
     stopDrive();
     logMsg("Stopped before the limbo");
     return;
   }
-  turnTo(0.0);
-  if (!driveTo(GOAL_X, LIMBO_LANE_Y, POS_TOL_M)) finishBlindIfVisionLost();
+  if (followLine(LIMBO_LANE_Y, GOAL_X, FOLLOW_PWM, false, legTimeoutMs(GOAL_X - LIMBO_ALIGN_X)) != FOLLOW_DONE) {
+    finishBlindIfVisionLost();
+  }
   stopDrive();
   logPose("Pose at end");
   logMsg("Run complete");

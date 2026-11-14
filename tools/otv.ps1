@@ -10,6 +10,7 @@
 #   otvvision               open the vision system page (room 1120)
 #   otvmonitor              Serial monitor (robot only; SIM/Tank builds print nothing)
 #   otvsim                  regenerate sim/otv_sim/otv_sim.ino for the browser simulator
+#   otvsimcheck [-Runs 5]   run every moving sim demo N times and check the Tank stays in the course
 #   otvpull                 pull teammate sketches from Google Drive
 #   otv2 .. otv10           MS5 demos (otv7a / otv7b for sub-task 7), see otvhelp
 #
@@ -77,10 +78,13 @@ function otvhelp {
   otvvision               open the vision system page (room 1120)
   otvmonitor              Serial monitor at 115200 (robot only)
   otvsim                  regenerate the browser simulator file
+  otvsimcheck [-Runs 5]   run otv6, 7a, 7b + full mission N times each in the sim and
+                          check the Tank (as drawn) never leaves the arena, never touches
+                          a solid obstacle, and passes the limbo opening (~1 min per run)
   otvpull                 pull teammate sketches from Google Drive
 
 MS5 demos (numbers = MS5 sub-tasks):
-  otv2 [-Seconds 60]      robot: drive straight, open loop (overshoots 3.4 m)
+  otv2 [-Seconds 45]      robot: drive straight ~3.4 m, open loop (time = distance / DRIVE_SPEED_MPS)
   otv3 [-TurnMs 1900]     robot: three timed 90 deg turns
   otv4                    sim: wireless receive (prints x, y, theta)
   otv5                    sim: wireless transmit (mission messages)
@@ -90,7 +94,7 @@ MS5 demos (numbers = MS5 sub-tasks):
   otv8                    robot: front ultrasonic readout (obstacle sensing)
   otv9                    robot: arm ultrasonic readout (mission sensing)
   otv10                   robot: arm down, pump, arm stow (mission actuation)
-  Sim commands copy the code to the clipboard and open the simulator.
+  Sim commands run by themselves in their own Chrome window and print progress here.
 
 TANK: upload with Tank power OFF, unplug USB, THEN power on (power-on starts the run).
 "@
@@ -188,6 +192,54 @@ function otvsim {
     powershell -ExecutionPolicy Bypass -File (Join-Path $script:OtvRoot 'tools\make_sim.ps1')
 }
 
+# Runs every moving sim demo $Runs times with the footprint checker
+# (tools/sim_autorun.js --check) and prints a PASS/FAIL table.
+function otvsimcheck {
+    param([int]$Runs = 5)
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Write-Otv 'Node.js not found.' Red; return }
+    $mk = Join-Path $script:OtvRoot 'tools\make_sim.ps1'
+    powershell -ExecutionPolicy Bypass -File $mk | Out-Null
+    $cases = @(
+        @{ Name = 'otv6';  Task = 6;  File = 'sim\ms5\task6_nav.ino';      Buttons = 'Randomize,Remove Obstacles' }
+        @{ Name = 'otv7a'; Task = 71; File = 'sim\ms5\task7a_wallhug.ino'; Buttons = 'Randomize' }
+        @{ Name = 'otv7b'; Task = 72; File = 'sim\ms5\task7b_detour.ino';  Buttons = 'Randomize' }
+        @{ Name = 'full';  Task = 0;  File = 'sim\otv_sim\otv_sim.ino';    Buttons = 'Randomize' }
+    )
+    foreach ($c in $cases) {
+        if ($c.Task) { powershell -ExecutionPolicy Bypass -File $mk -Task $c.Task -Out (Join-Path $script:OtvRoot $c.File) | Out-Null }
+    }
+    $js = Join-Path $script:OtvRoot 'tools\sim_autorun.js'
+    $tmp = Join-Path $env:TEMP 'otv_simcheck.txt'
+    $results = @()
+    Write-Otv "Footprint check: $Runs run(s) each of otv6, otv7a, otv7b, full mission (random starts)"
+    foreach ($c in $cases) {
+        for ($i = 1; $i -le $Runs; $i++) {
+            # Output goes to a file, not a pipe: a Chrome window started by
+            # node would otherwise hold the pipe open.
+            $file = Join-Path $script:OtvRoot $c.File
+            $argStr = "--experimental-websocket --no-warnings `"$js`" `"$file`" `"$($c.Buttons)`" 240 --check --quiet"
+            $p = Start-Process node -ArgumentList $argStr -RedirectStandardOutput $tmp -NoNewWindow -PassThru
+            $p.WaitForExit()
+            $out = Get-Content $tmp
+            $check = $out | Where-Object { $_ -like 'CHECK *' } | Select-Object -First 1
+            $end = $out | Where-Object { $_ -like 'END *' } | Select-Object -First 1
+            $why = $out | Where-Object { $_ -like '  *' -or $_ -like 'SIM AUTORUN FAILED*' }
+            $ok = $check -like 'CHECK PASS*'
+            Write-Host ("  {0,-6} run {1}: {2}" -f $c.Name, $i, $(if ($ok) { 'PASS' } else { 'FAIL' })) -ForegroundColor $(if ($ok) { 'Green' } else { 'Red' })
+            Write-Host "      $end"
+            Write-Host "      $check"
+            foreach ($w in $why) { Write-Host "      $w" -ForegroundColor Red }
+            $results += [pscustomobject]@{ Demo = $c.Name; Pass = $ok }
+        }
+    }
+    $fails = @($results | Where-Object { -not $_.Pass }).Count
+    Write-Host ''
+    $results | Group-Object Demo | ForEach-Object {
+        Write-Host ("  {0,-6} {1}/{2} passed" -f $_.Name, @($_.Group | Where-Object Pass).Count, $_.Count)
+    }
+    if ($fails) { Write-Otv "$fails run(s) FAILED (details above)" Red } else { Write-Otv 'All runs stayed inside the course.' Green }
+}
+
 function otvpull {
     powershell -ExecutionPolicy Bypass -File (Join-Path $script:OtvRoot 'tools\pull_teammates.ps1')
     git -C $script:OtvRoot status --short teammates
@@ -250,7 +302,7 @@ function Invoke-OtvRobotTask([string]$Title, [string]$Flags, [string]$Next, [swi
 }
 
 function otv2 {
-    param([int]$Seconds = 60)
+    param([int]$Seconds = 45)
     Invoke-OtvRobotTask "2 forward locomotion ($Seconds s)" "-DMS5_TASK=2 -DMS5_FORWARD_MS=$($Seconds * 1000)" @"
 Next:
   1. Unplug USB. Set the OTV in the landing zone facing +x (toward the limbo).
@@ -313,7 +365,7 @@ function Read-OtvNumber([string]$Prompt, [int]$Default) {
 
 $script:OtvMenu = @(
     @{ Section = 'MS5 ON THE ROBOT   (plug the OTV in over USB first)' }
-    @{ Key = '2';  Title = 'Forward 3.4 m';         When = 'uploads, then unplug + kill switch; catch it';  Run = { otv2 -Seconds (Read-OtvNumber 'Seconds to drive' 60) } }
+    @{ Key = '2';  Title = 'Forward 3.4 m';         When = 'uploads, then unplug + kill switch; catch it';  Run = { otv2 -Seconds (Read-OtvNumber 'Seconds to drive' 45) } }
     @{ Key = '3';  Title = '3 x 90 deg turns';      When = 'uploads, then unplug + kill switch';            Run = { otv3 -TurnMs (Read-OtvNumber 'ms per 90 deg turn' 1900) } }
     @{ Key = '8';  Title = 'Obstacle sensor';       When = 'stays on USB; live front ultrasonic readout';   Run = { otv8 } }
     @{ Key = '9';  Title = 'Mission (depth) sensor';When = 'stays on USB; live arm ultrasonic readout';     Run = { otv9 } }
@@ -340,6 +392,7 @@ $script:OtvMenu = @(
         otvsim
         if ($LASTEXITCODE -ne 0) { Write-Otv 'SIM BUILD FAILED' Red; return }
         Start-OtvSimAuto (Join-Path $script:OtvRoot 'sim\otv_sim\otv_sim.ino') 'Randomize' } }
+    @{ Key = 'k';  Title = 'Check sim paths';       When = 'runs 6, 7a, 7b, full x5; Tank must stay in the course'; Run = { otvsimcheck } }
     @{ Key = 'p';  Title = 'Pull teammate code';    When = 'from Google Drive';                             Run = { otvpull } }
     @{ Key = 'h';  Title = 'All typed commands';    When = 'otvhelp';                                       Run = { otvhelp } }
 )
