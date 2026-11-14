@@ -121,8 +121,8 @@ const int FRONT_HITS_NEEDED   = 2;    // consecutive close pings before stopping
 // ---- Drive (DO NOT RAISE MAX_PWM without asking Micah) ----
 // 6 V motors on a 9.6 V pack: cap at 60% (0.60 * 255 = 153).
 const int  MAX_PWM      = 153;
-const bool LEFT_INVERT  = false;  // [MEASURE] flip if left wheel runs backward
-const bool RIGHT_INVERT = false;  // [MEASURE] flip if right wheel runs backward
+const bool LEFT_INVERT  = false;  // confirmed 2026-11-13 (drive_arm_test: both wheels forward)
+const bool RIGHT_INVERT = false;  // confirmed 2026-11-13 (drive_arm_test: both wheels forward)
 
 // ---- Navigation tuning ----
 const int   DRIVE_PWM          = 140;    // straight-line drive PWM
