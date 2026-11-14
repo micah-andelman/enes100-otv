@@ -15,6 +15,9 @@ finish before starting the next.
 
 Each one opens its own Chrome window, sets everything up and runs by itself.
 Progress prints in the PowerShell window; it says `Done.` at the end.
+The window opens maximized with the code hidden (arena, pose and console
+only); the sim console ends with `MS5 demo DONE - robot stopped`. Do not
+switch it to fullscreen (F11): fullscreen runs hit obstacles in testing.
 
 | Sub-task | Command / key | What the grader sees |
 |---|---|---|

@@ -203,6 +203,26 @@ const CHECKER = `
   }
 `;
 
+// Demo view: hides the code editor pane (left) and its divider, so the arena,
+// pose and console fill the maximized window (not fullscreen: fullscreen runs hit obstacles in otvsimcheck, 2026-11-14). The editor's buttons still work
+// from script. Registered before the reload so the code never shows.
+const DEMO_VIEW = `(() => {
+  const add = () => {
+    if (document.getElementById('otv-demo-view')) return;
+    const s = document.createElement('style');
+    s.id = 'otv-demo-view';
+    s.textContent = '#outer>div:nth-child(1),#outer>div:nth-child(2){display:none!important}' +
+      '#outer>div:nth-child(3){width:100%!important}' +
+      '#outer>div:nth-child(3) canvas{width:auto!important;height:auto!important;max-width:100%;max-height:calc(100vh - 220px);align-self:center}' +
+      '#outer>div:nth-child(3) textarea{min-height:120px}';
+    (document.head || document.documentElement).appendChild(s);
+  };
+  if (!location.href.startsWith(${JSON.stringify(SIM_URL)})) return;
+  if (document.documentElement) { add(); return; }
+  const mo = new MutationObserver(() => { if (document.documentElement) { mo.disconnect(); add(); } });
+  mo.observe(document, { childList: true });
+})()`;
+
 // Only one run may drive the sim window at a time (two runs reload and
 // reprogram the same tab under each other).
 const LOCK = path.join(PROFILE, 'otv-autorun.lock');
@@ -226,6 +246,11 @@ async function main() {
   const cdp = await connect(tab.webSocketDebuggerUrl);
   await cdp.send('Page.enable');
   await cdp.send('Page.bringToFront');
+  try {
+    const w = await cdp.send('Browser.getWindowForTarget');
+    if (w.result) await cdp.send('Browser.setWindowBounds', { windowId: w.result.windowId, bounds: { windowState: 'maximized' } });
+  } catch {}
+  await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: DEMO_VIEW });
 
   // Speed must be "instant" (index 2). It is read at page load, so set it, then reload.
   // A freshly opened (or reloading) tab is briefly a blank/placeholder
@@ -251,7 +276,7 @@ async function main() {
     } catch { ready = false; }
   }
   if (!ready) die('simulator page did not load (internet?)');
-  await cdp.eval(HELPERS + '1');
+  await cdp.eval(HELPERS + DEMO_VIEW + '; 1');
   if (CHECK) await cdp.eval(CHECKER + '1');
 
   const speed = await cdp.eval(`(__btn(/execution speed/) || {}).title || ''`);
