@@ -199,31 +199,40 @@ function otvpull {
 
 $script:OtvSimUrl = 'https://umdenes100.github.io/enes100-simulator/'
 
-# Builds a single-file sim sketch for MS5_TASK=$Task, copies it to the
-# clipboard and opens the simulator.
-function Invoke-OtvSimTask([int]$Task, [string]$Name, [string]$Title, [string]$Setup) {
-    $out = Join-Path $script:OtvRoot "sim\ms5\$Name.ino"
-    Write-Otv "MS5 $Title (simulator)"
-    powershell -ExecutionPolicy Bypass -File (Join-Path $script:OtvRoot 'tools\make_sim.ps1') -Task $Task -Out $out
-    if ($LASTEXITCODE -ne 0) { Write-Otv 'SIM BUILD FAILED' Red; return }
-    Get-Content -Raw $out | Set-Clipboard
+# Runs a sim sketch in the browser simulator with no clicks: tools/sim_autorun.js
+# opens its own Chrome window, loads the code, sets speed to instant, clicks
+# $Buttons, Run and Continue, then prints the pose + sim console here.
+# Falls back to the clipboard + manual steps if Node is missing or it fails.
+function Start-OtvSimAuto([string]$File, [string]$Buttons) {
+    $node = Get-Command node -ErrorAction SilentlyContinue
+    if ($node) {
+        $js = Join-Path $script:OtvRoot 'tools\sim_autorun.js'
+        & node --experimental-websocket --no-warnings $js $File $Buttons 180
+        if ($LASTEXITCODE -eq 0) { return }
+        Write-Otv 'Automatic run failed (message above). Falling back to manual steps.' Yellow
+    } else {
+        Write-Otv 'Node.js not found, so the simulator cannot be driven automatically.' Yellow
+    }
+    Get-Content -Raw $File | Set-Clipboard
     Start-Process $script:OtvSimUrl
-    Write-Otv 'Code copied to the clipboard. Simulator opened.' Green
     Write-Host @"
 
-In the simulator:
-  1. Click in the code editor, Ctrl+A, Ctrl+V.
-  2. Speed: hover the 2nd button from the left (next to Run). Its tooltip
-     must say "instant code execution speed". If it says normal or slow,
-     click it until it says instant (the browser remembers this).
-  3. $Setup
-  4. Click Run (top-left triangle). The program starts PAUSED on line 1.
-  5. Click Continue (the next button, triangle with a bar) to let it run.
-  6. Keep the browser window in front while it runs (Chrome pauses the
-     physics in hidden or covered windows).
-  7. Watch the console under the arena for the printed messages.
-(File: $out)
+Code copied to the clipboard. In the simulator:
+  1. 2nd button from the left: click until its tooltip says "instant".
+  2. Click in the code editor, Ctrl+A, Ctrl+V.
+  3. Click: $($Buttons -replace ',', ', then ')
+  4. Click Run, then Continue (Run starts paused).
 "@
+}
+
+# Builds a single-file sim sketch for MS5_TASK=$Task and runs it.
+function Invoke-OtvSimTask([int]$Task, [string]$Name, [string]$Title, [string]$Buttons, [string]$Note) {
+    $out = Join-Path $script:OtvRoot "sim\ms5\$Name.ino"
+    Write-Otv "MS5 $Title (simulator)"
+    Write-Host $Note
+    powershell -ExecutionPolicy Bypass -File (Join-Path $script:OtvRoot 'tools\make_sim.ps1') -Task $Task -Out $out
+    if ($LASTEXITCODE -ne 0) { Write-Otv 'SIM BUILD FAILED' Red; return }
+    Start-OtvSimAuto $out $Buttons
 }
 
 # Compiles + uploads a robot demo. $Flags are extra -D flags.
@@ -262,11 +271,11 @@ Next:
 "@
 }
 
-function otv4  { Invoke-OtvSimTask 4  'task4_receive'  '4 wireless receive'  'Any start position. It prints x, y, theta 20 times (spinning for the last 10).' }
-function otv5  { Invoke-OtvSimTask 5  'task5_transmit' '5 wireless transmit' 'Any start position. It sends DEPTH and WATER_TYPE once each.' }
-function otv6  { Invoke-OtvSimTask 6  'task6_nav'      '6 navigation, no obstacles' 'Click Randomize, THEN Remove Obstacles (Randomize puts them back). It goes to the mission site, then stops just before the limbo.' }
-function otv7a { Invoke-OtvSimTask 71 'task7a_wallhug' '7a obstacle avoidance (wall hug)' 'Click Randomize (random start + obstacles). Full route: mission site, wall hug past the obstacles, limbo, goal.' }
-function otv7b { Invoke-OtvSimTask 72 'task7b_detour'  '7b obstacle avoidance (encounter + detour)' 'Click Randomize (random start + obstacles). It drives down a lane, sees an obstacle, backs up, changes lane, and stops past both columns.' }
+function otv4  { Invoke-OtvSimTask 4  'task4_receive'  '4 wireless receive'  'Randomize' 'Prints x, y, theta 20 times (spinning for the last 10).' }
+function otv5  { Invoke-OtvSimTask 5  'task5_transmit' '5 wireless transmit' 'Randomize' 'Sends DEPTH and WATER_TYPE once each.' }
+function otv6  { Invoke-OtvSimTask 6  'task6_nav'      '6 navigation, no obstacles' 'Randomize,Remove Obstacles' 'Random start, no obstacles: mission site, then stops just before the limbo.' }
+function otv7a { Invoke-OtvSimTask 71 'task7a_wallhug' '7a obstacle avoidance (wall hug)' 'Randomize' 'Random start + obstacles. Full route: mission site, wall hug past the obstacles, limbo, goal.' }
+function otv7b { Invoke-OtvSimTask 72 'task7b_detour'  '7b obstacle avoidance (encounter + detour)' 'Randomize' 'Random obstacles. Drives down a lane, sees an obstacle, backs up, changes lane, stops past both columns.' }
 
 function otv8 {
     Invoke-OtvRobotTask '8 obstacle sensing (front ultrasonic)' '-DTEST_MODE=7' @"
@@ -309,7 +318,7 @@ $script:OtvMenu = @(
     @{ Key = '8';  Title = 'Obstacle sensor';       When = 'stays on USB; live front ultrasonic readout';   Run = { otv8 } }
     @{ Key = '9';  Title = 'Mission (depth) sensor';When = 'stays on USB; live arm ultrasonic readout';     Run = { otv9 } }
     @{ Key = '10'; Title = 'Arm + pump';            When = 'USB + kill switch ON; Enter runs it';           Run = { otv10 } }
-    @{ Section = 'MS5 IN THE SIMULATOR   (opens the browser; speed = instant, Ctrl+A, Ctrl+V, Run, Continue)' }
+    @{ Section = 'MS5 IN THE SIMULATOR   (runs by itself in its own Chrome window)' }
     @{ Key = '4';  Title = 'Wireless receive';      When = 'prints x, y, theta';                            Run = { otv4 } }
     @{ Key = '5';  Title = 'Wireless transmit';     When = 'sends depth + water type';                      Run = { otv5 } }
     @{ Key = '6';  Title = 'Navigation, no obstacles'; When = 'start -> mission site -> before the limbo';  Run = { otv6 } }
@@ -327,11 +336,10 @@ $script:OtvMenu = @(
     @{ Key = 'm';  Title = 'Serial monitor';        When = 'robot on USB';                                  Run = { otvmonitor } }
     @{ Key = 'c';  Title = 'Find the board';        When = 'which board + COM port is plugged in';          Run = { otvconnect } }
     @{ Key = 'v';  Title = 'Vision system page';    When = 'room 1120';                                     Run = { otvvision } }
-    @{ Key = 's';  Title = 'Open the simulator';    When = 'full mission sim file, copied to clipboard';    Run = {
+    @{ Key = 's';  Title = 'Full mission in the sim'; When = 'runs by itself in its own Chrome window';     Run = {
         otvsim
-        Get-Content -Raw (Join-Path $script:OtvRoot 'sim\otv_sim\otv_sim.ino') | Set-Clipboard
-        Start-Process $script:OtvSimUrl
-        Write-Otv 'Full mission copied to the clipboard. In the simulator: speed button = instant, Ctrl+A, Ctrl+V, Run, then Continue (Run starts paused).' Green } }
+        if ($LASTEXITCODE -ne 0) { Write-Otv 'SIM BUILD FAILED' Red; return }
+        Start-OtvSimAuto (Join-Path $script:OtvRoot 'sim\otv_sim\otv_sim.ino') 'Randomize' } }
     @{ Key = 'p';  Title = 'Pull teammate code';    When = 'from Google Drive';                             Run = { otvpull } }
     @{ Key = 'h';  Title = 'All typed commands';    When = 'otvhelp';                                       Run = { otvhelp } }
 )
