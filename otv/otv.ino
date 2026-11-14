@@ -44,6 +44,18 @@ void setup() {
 #endif
 #if SIM
   logMsg("Target: SIMULATOR");
+  if (!simSpeedOk()) {
+    // Stop here: nothing steers correctly at this speed.
+    // (No commas: the simulator console drops the space after them.)
+    logMsg("STOPPED: simulator speed is too slow.");
+    logMsg("1. Click Stop (top-left square).");
+    logMsg("2. Click the speed button (2nd from the left) until its tooltip says instant.");
+    logMsg("3. Click Run and then Continue again.");
+    while (true) {
+      stopDrive();
+      delay(1000);
+    }
+  }
 #endif
 }
 

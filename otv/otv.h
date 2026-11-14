@@ -39,6 +39,7 @@ void logVal(const char *label, float value);
 float wrapAngle(float a);
 bool waitForConnection(unsigned long timeoutMs);
 bool waitForVision(unsigned long timeoutMs);
+bool simSpeedOk();  // SIM only: false if the simulator speed is not "instant"
 bool obstacleAhead();
 bool turnTo(float heading);
 bool driveTo(float x, float y, float stopDistance);

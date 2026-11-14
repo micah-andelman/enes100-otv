@@ -213,10 +213,15 @@ function Invoke-OtvSimTask([int]$Task, [string]$Name, [string]$Title, [string]$S
 
 In the simulator:
   1. Click in the code editor, Ctrl+A, Ctrl+V.
-  2. $Setup
-  3. Click Run (top-left triangle). The program starts PAUSED on line 1.
-  4. Click Continue (the next button, triangle with a bar) to let it run.
-  5. Watch the console under the arena for the printed messages.
+  2. Speed: hover the 2nd button from the left (next to Run). Its tooltip
+     must say "instant code execution speed". If it says normal or slow,
+     click it until it says instant (the browser remembers this).
+  3. $Setup
+  4. Click Run (top-left triangle). The program starts PAUSED on line 1.
+  5. Click Continue (the next button, triangle with a bar) to let it run.
+  6. Keep the browser window in front while it runs (Chrome pauses the
+     physics in hidden or covered windows).
+  7. Watch the console under the arena for the printed messages.
 (File: $out)
 "@
 }
@@ -304,7 +309,7 @@ $script:OtvMenu = @(
     @{ Key = '8';  Title = 'Obstacle sensor';       When = 'stays on USB; live front ultrasonic readout';   Run = { otv8 } }
     @{ Key = '9';  Title = 'Mission (depth) sensor';When = 'stays on USB; live arm ultrasonic readout';     Run = { otv9 } }
     @{ Key = '10'; Title = 'Arm + pump';            When = 'USB + kill switch ON; Enter runs it';           Run = { otv10 } }
-    @{ Section = 'MS5 IN THE SIMULATOR   (opens the browser; Ctrl+A, Ctrl+V, Run, then Continue)' }
+    @{ Section = 'MS5 IN THE SIMULATOR   (opens the browser; speed = instant, Ctrl+A, Ctrl+V, Run, Continue)' }
     @{ Key = '4';  Title = 'Wireless receive';      When = 'prints x, y, theta';                            Run = { otv4 } }
     @{ Key = '5';  Title = 'Wireless transmit';     When = 'sends depth + water type';                      Run = { otv5 } }
     @{ Key = '6';  Title = 'Navigation, no obstacles'; When = 'start -> mission site -> before the limbo';  Run = { otv6 } }
@@ -326,7 +331,7 @@ $script:OtvMenu = @(
         otvsim
         Get-Content -Raw (Join-Path $script:OtvRoot 'sim\otv_sim\otv_sim.ino') | Set-Clipboard
         Start-Process $script:OtvSimUrl
-        Write-Otv 'Full mission copied to the clipboard. In the simulator: Ctrl+A, Ctrl+V, Run, then Continue (Run starts paused).' Green } }
+        Write-Otv 'Full mission copied to the clipboard. In the simulator: speed button = instant, Ctrl+A, Ctrl+V, Run, then Continue (Run starts paused).' Green } }
     @{ Key = 'p';  Title = 'Pull teammate code';    When = 'from Google Drive';                             Run = { otvpull } }
     @{ Key = 'h';  Title = 'All typed commands';    When = 'otvhelp';                                       Run = { otvhelp } }
 )

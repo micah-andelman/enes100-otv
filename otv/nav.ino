@@ -55,6 +55,24 @@ void logPose(const char *label) {
   logVal("  theta = ", Enes100.getTheta());
 }
 
+#if SIM
+// Loop counter for simSpeedOk (global: the simulator resets static locals).
+int gSpeedLoops = 0;
+
+// The browser simulator waits between source lines: ~4-15 ms at "instant",
+// 50 ms at "normal", 100 ms at "slow". At normal/slow one control-loop pass
+// takes over a second, so turnTo overshoots back and forth until it times
+// out. Times a few trivial loop passes. (The physical Tank passes instantly.)
+bool simSpeedOk() {
+  unsigned long t0 = millis();
+  gSpeedLoops = 0;
+  while (gSpeedLoops < SIM_SPEED_CHECK_LOOPS) {
+    gSpeedLoops++;
+  }
+  return (millis() - t0) <= SIM_SPEED_MAX_MS;
+}
+#endif
+
 float wrapAngle(float a) {
   while (a > PI) a -= TWO_PI;
   while (a < -PI) a += TWO_PI;

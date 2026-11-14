@@ -218,6 +218,11 @@ const int   DEPTH_FALLBACK_MM = 30;
 
 // ---- Simulator stand-ins (no water in the sim) ----
 const int  SIM_DEPTH_MM   = 30;
+// Browser simulator speed check (setup): steering only works at the
+// "instant" execution speed. 10 trivial loop passes take ~150 ms at
+// instant, ~1800 ms at normal, ~3500 ms at slow (measured 2026-11-14).
+const int  SIM_SPEED_CHECK_LOOPS = 10;
+const unsigned long SIM_SPEED_MAX_MS = 800;
 const bool SIM_POLLUTED   = false;
 const unsigned long SIM_ARM_MS  = 500;   // stub delay (chosen, not specified)
 const unsigned long SIM_PUMP_MS = 1000;  // stub delay (chosen, not specified)

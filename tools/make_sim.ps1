@@ -13,6 +13,9 @@ param([int]$Task = 0, [string]$Out = '')
 
 $ErrorActionPreference = 'Stop'
 
+# Without -Out a demo build would overwrite the full-mission otv_sim.ino.
+if ($Task -ne 0 -and -not $Out) { throw '-Task needs -Out (use otv4..otv7b, which pass it)' }
+
 $root   = Split-Path -Parent $PSScriptRoot
 $srcDir = Join-Path $root 'otv'
 if ($Out) {

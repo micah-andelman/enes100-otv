@@ -129,6 +129,11 @@ const int DEPTH_STEP_MM = 10;
 const int DEPTH_FALLBACK_MM = 30;
 // ---- Simulator stand-ins (no water in the sim) ----
 const int SIM_DEPTH_MM = 30;
+// Browser simulator speed check (setup): steering only works at the
+// "instant" execution speed. 10 trivial loop passes take ~150 ms at
+// instant, ~1800 ms at normal, ~3500 ms at slow (measured 2026-11-14).
+const int SIM_SPEED_CHECK_LOOPS = 10;
+const unsigned long SIM_SPEED_MAX_MS = 800;
 const bool SIM_POLLUTED = false;
 const unsigned long SIM_ARM_MS = 500; // stub delay (chosen, not specified)
 const unsigned long SIM_PUMP_MS = 1000; // stub delay (chosen, not specified)
@@ -188,6 +193,7 @@ void logVal(const char *label, float value);
 float wrapAngle(float a);
 bool waitForConnection(unsigned long timeoutMs);
 bool waitForVision(unsigned long timeoutMs);
+bool simSpeedOk(); // SIM only: false if the simulator speed is not "instant"
 bool obstacleAhead();
 bool turnTo(float heading);
 bool driveTo(float x, float y, float stopDistance);
@@ -218,6 +224,18 @@ void setup() {
   gVisionStarted = true;
   if (!waitForConnection(WIFI_CONNECT_MS)) logMsg("Vision system not connected, continuing");
   logMsg("Target: SIMULATOR");
+  if (!simSpeedOk()) {
+    // Stop here: nothing steers correctly at this speed.
+    // (No commas: the simulator console drops the space after them.)
+    logMsg("STOPPED: simulator speed is too slow.");
+    logMsg("1. Click Stop (top-left square).");
+    logMsg("2. Click the speed button (2nd from the left) until its tooltip says instant.");
+    logMsg("3. Click Run and then Continue again.");
+    while (true) {
+      stopDrive();
+      delay(1000);
+    }
+  }
 }
 void loop() {
   runMs5();
@@ -317,6 +335,20 @@ void logPose(const char *label) {
   logVal("  x = ", Enes100.getX());
   logVal("  y = ", Enes100.getY());
   logVal("  theta = ", Enes100.getTheta());
+}
+// Loop counter for simSpeedOk (global: the simulator resets static locals).
+int gSpeedLoops = 0;
+// The browser simulator waits between source lines: ~4-15 ms at "instant",
+// 50 ms at "normal", 100 ms at "slow". At normal/slow one control-loop pass
+// takes over a second, so turnTo overshoots back and forth until it times
+// out. Times a few trivial loop passes. (The physical Tank passes instantly.)
+bool simSpeedOk() {
+  unsigned long t0 = millis();
+  gSpeedLoops = 0;
+  while (gSpeedLoops < SIM_SPEED_CHECK_LOOPS) {
+    gSpeedLoops++;
+  }
+  return (millis() - t0) <= SIM_SPEED_MAX_MS;
 }
 float wrapAngle(float a) {
   while (a > PI) a -= TWO_PI;
