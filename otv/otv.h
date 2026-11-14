@@ -28,6 +28,8 @@ int snapDepthMM(int rawMM);  // nearest of 20/30/40; fallback if the reading fai
 void runMission();
 #if !SIM
 bool colorIsPolluted(int r, int g, int b);  // shared by isPolluted() and bench test 5
+float pingMM(int trigPin, int echoPin);     // one HC-SR04 ping, -1 = no echo
+void pumpRunMs(unsigned long ms);           // pump on for a fixed time (bench test 2)
 #endif
 
 // nav.ino
@@ -41,7 +43,12 @@ bool obstacleAhead();
 bool turnTo(float heading);
 bool driveTo(float x, float y, float stopDistance);
 bool hugWall(float xEnd);
+void logPose(const char *label);
 void runFullRun();
+void runRoute(bool toGoal);  // false = stop just before the limbo (MS5 sub-task 6)
 
 // tests.ino (robot only)
 void runTests();
+
+// ms5.ino (Milestone 5 demos, MS5_TASK != 0)
+void runMs5();

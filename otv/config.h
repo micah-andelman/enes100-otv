@@ -21,16 +21,45 @@
 #define TEST_ULTRASONIC  4
 #define TEST_COLOR       5
 #define TEST_VISION      6
-#define TEST_IR          7
+#define TEST_FRONT_US    7
 #ifndef TEST_MODE
 #define TEST_MODE TEST_NONE
 #endif
 
-#if (TEST_MODE < TEST_NONE) || (TEST_MODE > TEST_IR)
+#if (TEST_MODE < TEST_NONE) || (TEST_MODE > TEST_FRONT_US)
 #error "TEST_MODE must be 0..7"
 #endif
 #if SIM && (TEST_MODE != TEST_NONE)
 #error "Bench tests (TEST_MODE 1-7) are robot-only. Build with -DSIM=0."
+#endif
+
+// MS5_TASK: 0 = normal build. Milestone 5 demos (tools/otv.ps1: otv2..otv10).
+// Numbers match the MS5 sub-tasks; 7a/7b are 71/72.
+// Simulator only: 4, 5, 6, 71, 72. Robot only: 2, 3, 10.
+// (otv8/otv9 reuse bench tests 7 and 4, so they have no MS5_TASK.)
+#define MS5_NONE      0
+#define MS5_FORWARD   2   // robot: drive straight, open loop (overshoots 3.4 m)
+#define MS5_TURN      3   // robot: three timed 90 deg turns in place
+#define MS5_RECEIVE   4   // sim: print x/y/theta from vision
+#define MS5_TRANSMIT  5   // sim: send the mission messages
+#define MS5_NAV       6   // sim: start -> mission site -> just before the limbo
+#define MS5_WALLHUG   71  // sim 7a: full route (wall hug past the obstacles)
+#define MS5_DETOUR    72  // sim 7b: drive at an obstacle, detect it, detour around it
+#define MS5_ACTUATE   10  // robot: arm down, pump, arm stow (on Serial keypress)
+#ifndef MS5_TASK
+#define MS5_TASK MS5_NONE
+#endif
+
+#if MS5_TASK != MS5_NONE
+#if TEST_MODE != TEST_NONE
+#error "Set MS5_TASK or TEST_MODE, not both."
+#endif
+#if SIM && !((MS5_TASK == MS5_RECEIVE) || (MS5_TASK == MS5_TRANSMIT) || (MS5_TASK == MS5_NAV) || (MS5_TASK == MS5_WALLHUG) || (MS5_TASK == MS5_DETOUR))
+#error "This MS5_TASK is robot only. Build with -DSIM=0."
+#endif
+#if !SIM && !((MS5_TASK == MS5_FORWARD) || (MS5_TASK == MS5_TURN) || (MS5_TASK == MS5_ACTUATE))
+#error "This MS5_TASK is simulator only (SIM=1)."
+#endif
 #endif
 
 #if SIM
@@ -60,15 +89,15 @@ const long SERIAL_BAUD = 115200;
 
 #if !SIM
 // ---- Pins (robot only: the browser simulator has no A0..A5) ----
-// D0/D1: reserved for USB serial. D4: unused (old MS2 map had color
-// OUT here). A4: free.
-const int PIN_IR          = 2;   // KY-032 IR obstacle sensor (digital)
+// Final wiring (2026-11-12). D0/D1: reserved for USB serial. A5: unused.
+const int PIN_FRONT_US_TRIG = 2; // Front HC-SR04 TRIG (obstacle stop; replaced the KY-032 IR)
+const int PIN_FRONT_US_ECHO = A4;// Front HC-SR04 ECHO
 const int PIN_LEFT_IN1    = 3;   // Left DRV8871 IN1
 const int PIN_LEFT_IN2    = 5;   // Left DRV8871 IN2
 const int PIN_RIGHT_IN1   = 6;   // Right DRV8871 IN1
 const int PIN_RIGHT_IN2   = 9;   // Right DRV8871 IN2
-const int PIN_US_TRIG     = 7;   // HC-SR04 TRIG
-const int PIN_US_ECHO     = 8;   // HC-SR04 ECHO
+const int PIN_US_TRIG     = 7;   // Arm HC-SR04 TRIG (depth)
+const int PIN_US_ECHO     = 8;   // Arm HC-SR04 ECHO (depth)
 const int PIN_PUMP_GATE   = 10;  // IRLZ44N gate, HIGH = pump on
 const int PIN_SERVO1      = 11;  // Arm servo 1 (SG90)
 const int PIN_SERVO2      = A2;  // Arm servo 2 (SG90)
@@ -76,11 +105,14 @@ const int PIN_COLOR_S0    = A0;  // TCS3200 S0
 const int PIN_COLOR_S1    = A1;  // TCS3200 S1
 const int PIN_COLOR_S2    = 12;  // TCS3200 S2
 const int PIN_COLOR_S3    = 13;  // TCS3200 S3
-const int PIN_COLOR_OUT   = A3;  // TCS3200 OUT. Follows Adiel's sketch, not MS2 (D4): confirm wiring
-const int PIN_COLOR_LED   = A5;  // TCS3200 LED
+const int PIN_COLOR_OUT   = 4;   // TCS3200 OUT
+const int PIN_COLOR_LED   = A3;  // TCS3200 LED/OE
 
-// ---- IR obstacle sensor ----
-const int IR_OBSTACLE_LEVEL = LOW;  // [MEASURE] assumed LOW = obstacle; needs bench verify
+// ---- Front ultrasonic obstacle stop ----
+// The HC-SR04 beam is ~30 deg wide, so in the wall-hug gap it can see the
+// obstacle sides and the wall next to the lane. Keep this short.
+const int FRONT_OBSTACLE_MM   = 150;  // [MEASURE] obstacle if a valid echo is closer than this
+const int FRONT_HITS_NEEDED   = 2;    // consecutive close pings before stopping (filters ghost echoes)
 #endif
 
 // ---- Drive (DO NOT RAISE MAX_PWM without asking Micah) ----
@@ -142,11 +174,21 @@ const unsigned long HUG_TIMEOUT_MS = 40000;  // [MEASURE] 1.7 m hug at ~7 cm/s o
 // remaining distance (from the last seen x and DRIVE_SPEED_MPS), capped here.
 const unsigned long LIMBO_BLIND_MAX_MS = 12000;  // chosen: ~0.9 m at 7.5 cm/s
 
-// ---- Obstacle safety stop (MS2 nav flow: front IR sees obstacle ->
+// ---- Obstacle safety stop (MS2 nav flow: front sensor sees obstacle ->
 // stop, back up, re-route with vision). Off for the pool approach, since
 // the pool is straight ahead there.
 const int   SIM_OBSTACLE_SENSOR_ID = 1;     // Tank distance sensor (enabled by default)
 const float SIM_OBSTACLE_THRESH_M  = 0.40;  // obstacle if closer than this
+// The Tank sensor also sees the arena walls, so a reading only counts if
+// the echo point (vision pose + heading + distance) lands on an obstacle
+// column. Obstacle geometry from the Arena Details doc (see Arena above).
+const float SIM_SENSOR_FRONT_M = 0.075;  // sensor ahead of the marker (sim Tank is 0.15 m long)
+const float OBST_COL1_X        = 1.5;    // column centers (doc)
+const float OBST_COL2_X        = 2.3;
+const float OBST_HALF_W        = 0.1;    // obstacles are 0.2 m wide (doc)
+const float OBST_Y_MIN         = 0.25;   // rows span y 0.25-1.75 (doc)
+const float OBST_Y_MAX         = 1.75;
+const float OBST_HIT_MARGIN_M  = 0.05;   // slack for vision/heading error (chosen)
 const unsigned long OBSTACLE_BACKUP_MS = 500;  // reverse time per hit (chosen, not specified)
 const int   MAX_OBSTACLE_HITS      = 3;     // give up the move after this many hits (chosen)
 
@@ -155,7 +197,7 @@ const float SAMPLE_ML        = 30.0;   // requirement is >= 20 mL
 const float PUMP_ML_PER_S    = 2.5;    // [MEASURE] unmeasured placeholder from Walter's sketch
 const int   ARM_STOW_DEG     = 20;     // [MEASURE] arm folded flat over the chassis (Walter's sketch: 20)
 const int   ARM_DOWN_DEG     = 160;    // [MEASURE] arm out over the water (Walter's sketch: 160)
-const bool  SERVO2_MIRRORED  = false;  // [MEASURE] true if servo 2 is mounted facing servo 1
+const bool  SERVO2_MIRRORED  = true;   // servo 2 faces servo 1 (confirmed by Micah 2026-11-13)
 const unsigned long SERVO_STEP_MS = 15;  // per 1 degree of sweep (limits 5 V rail spikes)
 const unsigned long ARM_SETTLE_MS = 500; // after arm down, before reading (chosen, not specified)
 const int   US_SAMPLES       = 25;     // ultrasonic readings per measurement (median is used)
@@ -182,7 +224,33 @@ const unsigned long SIM_PUMP_MS = 1000;  // stub delay (chosen, not specified)
 
 // ---- Bench tests (robot only) ----
 const unsigned long TEST_STEP_MS       = 1000;  // each drive test step
+const unsigned long TEST_PUMP_CHECK_MS = 2000;  // pump test: quick on/off check
+const unsigned long TEST_PUMP_PAUSE_MS = 5000;  // pump test: time to empty the measuring cup
+const unsigned long TEST_PUMP_CAL_MS   = 10000; // pump test: fixed-time run; PUMP_ML_PER_S = mL / 10
 const unsigned long TEST_GAP_MS        = 500;   // stop between drive steps
 const unsigned long TEST_ARM_HOLD_MS   = 2000;
 const unsigned long TEST_PRINT_MS      = 500;   // ultrasonic + color
 const unsigned long TEST_VISION_MS     = 250;
+
+// ---- MS5 demos (MS5_TASK, see top of file) ----
+// The two #defines can be overridden from the command line
+// (otv2 -Seconds N, otv3 -TurnMs N).
+#ifndef MS5_FORWARD_MS
+#define MS5_FORWARD_MS 60000  // 60 s at ~7.5 cm/s = ~4.5 m: overshoots 3.4 m on purpose (catch it)
+#endif
+#ifndef MS5_TURN90_MS
+#define MS5_TURN90_MS 1900    // [MEASURE] spin-in-place time for 90 deg at DRIVE_PWM
+#endif
+const unsigned long MS5_START_DELAY_MS = 5000;  // robot demos: time to step back after power-on
+const unsigned long MS5_TURN_PAUSE_MS  = 2000;  // between the three turns
+const unsigned long MS5_PRINT_MS       = 500;   // receive demo: between pose prints
+const int           MS5_RECEIVE_PRINTS = 20;    // receive demo: number of pose prints
+const unsigned long MS5_ARM_HOLD_MS    = 1000;  // actuation demo: arm down before pumping
+// Detour demo (7b): three lanes, one per obstacle row (rows span y 0.25-1.75).
+const float MS5_LANE_LOW_Y   = 0.5;
+const float MS5_LANE_MID_Y   = 1.0;
+const float MS5_LANE_HIGH_Y  = 1.5;
+const float MS5_DETOUR_START_X = 0.9;   // line up on a lane here (just before column 1 at x 1.4)
+const float MS5_DETOUR_END_X   = 2.8;   // past both obstacle columns
+const float MS5_LANE_CLEAR_M   = 0.6;   // this far past where it was blocked, reset the tried lanes (next column)
+const unsigned long MS5_DETOUR_TIMEOUT_MS = 90000;

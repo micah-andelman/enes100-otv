@@ -20,12 +20,12 @@ You don't need GitHub or any install beyond the Arduino IDE.
 
 | Pin | Function | Pin | Function |
 |---|---|---|---|
-| D2 | IR sensor | D10 | Pump MOSFET gate |
+| D2 / A4 | Front ultrasonic TRIG / ECHO | D10 | Pump MOSFET gate |
 | D3 / D5 | Left motor IN1 / IN2 | D11 | Servo 1 |
 | D6 / D9 | Right motor IN1 / IN2 | A2 | Servo 2 |
-| D7 / D8 | Ultrasonic TRIG / ECHO | A0 / A1 | Color S0 / S1 |
-| A3 | Color OUT | D12 / D13 | Color S2 / S3 |
-| A5 | Color LED | | |
+| D7 / D8 | Arm ultrasonic TRIG / ECHO | A0 / A1 | Color S0 / S1 |
+| D4 | Color OUT | D12 / D13 | Color S2 / S3 |
+| A3 | Color LED/OE | A5 | unused |
 
 ## Where things are (for Micah)
 

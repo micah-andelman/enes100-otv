@@ -27,6 +27,8 @@ void setup() {
   Serial.println("Target: ROBOT");
   Serial.print("TEST_MODE: ");
   Serial.println(TEST_MODE);
+  Serial.print("MS5_TASK: ");
+  Serial.println(MS5_TASK);
 #endif
 
   driveSetup();
@@ -34,8 +36,8 @@ void setup() {
   navSetup();
 
   // Only start vision when it is needed: hardware bench tests must run
-  // without the vision system.
-#if (TEST_MODE == TEST_NONE) || (TEST_MODE == TEST_VISION)
+  // without the vision system. Robot MS5 demos (2, 3, 10) don't use vision.
+#if (TEST_MODE == TEST_VISION) || ((TEST_MODE == TEST_NONE) && (SIM || (MS5_TASK == MS5_NONE)))
   Enes100.begin(TEAM_NAME, TEAM_TYPE, MARKER_ID, ROOM_NUMBER, VISION_WIFI_TX, VISION_WIFI_RX);
   gVisionStarted = true;
   if (!waitForConnection(WIFI_CONNECT_MS)) logMsg("Vision system not connected, continuing");
@@ -46,7 +48,9 @@ void setup() {
 }
 
 void loop() {
-#if TEST_MODE == TEST_NONE
+#if MS5_TASK != MS5_NONE
+  runMs5();
+#elif TEST_MODE == TEST_NONE
   if (!gRunDone) {
     runFullRun();
     gRunDone = true;

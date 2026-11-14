@@ -1,6 +1,6 @@
 // Bench tests: robot only. Build with -DSIM=0 -DTEST_MODE=n.
 // All output goes to Serial at SERIAL_BAUD.
-//   1 Drive   2 Pump   3 Arm   4 Ultrasonic   5 Color   6 Vision   7 IR
+//   1 Drive   2 Pump   3 Arm   4 Arm ultrasonic   5 Color   6 Vision   7 Front ultrasonic
 
 #if !SIM
 
@@ -13,6 +13,11 @@ static void testDriveStep(const char *name, int left, int right) {
 }
 
 static void testDrive() {
+  // Each wheel alone first, so a swapped or backward motor is obvious.
+  testDriveStep("DRIVE left wheel forward", DRIVE_PWM, 0);
+  testDriveStep("DRIVE left wheel back", -DRIVE_PWM, 0);
+  testDriveStep("DRIVE right wheel forward", 0, DRIVE_PWM);
+  testDriveStep("DRIVE right wheel back", 0, -DRIVE_PWM);
   testDriveStep("DRIVE forward", DRIVE_PWM, DRIVE_PWM);
   testDriveStep("DRIVE reverse", -DRIVE_PWM, -DRIVE_PWM);
   testDriveStep("DRIVE spin left", -DRIVE_PWM, DRIVE_PWM);
@@ -20,11 +25,18 @@ static void testDrive() {
   Serial.println("DRIVE done");
 }
 
-// Measure the actual mL collected to calibrate PUMP_ML_PER_S.
+// 2 s on/off check, then a fixed 10 s run: measure the mL from that run
+// to calibrate PUMP_ML_PER_S (fixed time, so the math doesn't depend on
+// the old placeholder rate).
 static void testPump() {
-  Serial.println("PUMP START");
-  pumpDispenseML(SAMPLE_ML);
-  Serial.println("PUMP STOP");
+  Serial.println("PUMP check: on 2 s");
+  pumpRunMs(TEST_PUMP_CHECK_MS);
+  Serial.println("PUMP check: off");
+  Serial.println("Empty the measuring cup. Calibration run starts in 5 s...");
+  delay(TEST_PUMP_PAUSE_MS);
+  Serial.println("PUMP calibration: on 10 s");
+  pumpRunMs(TEST_PUMP_CAL_MS);
+  Serial.println("PUMP calibration: off. PUMP_ML_PER_S = measured mL / 10");
 }
 
 static void testArm() {
@@ -79,12 +91,17 @@ static void testVision() {
   delay(TEST_VISION_MS);
 }
 
-// Checks the KY-032 polarity (IR_OBSTACLE_LEVEL is assumed LOW = obstacle).
-// Hold a hand in front and watch both columns change.
-static void testIR() {
-  Serial.print("IR pin=");
-  Serial.print(digitalRead(PIN_IR) == HIGH ? "HIGH" : "LOW");
-  Serial.println(obstacleAhead() ? "  obstacle" : "  clear");
+// Front ultrasonic (obstacle stop). Move a hand in and out and check the
+// obstacle/clear switch happens near FRONT_OBSTACLE_MM.
+static void testFrontUltrasonic() {
+  float mm = pingMM(PIN_FRONT_US_TRIG, PIN_FRONT_US_ECHO);
+  if (mm < 0) {
+    Serial.println("Front: no echo (nothing in range, or FAILED if something is close)  clear");
+  } else {
+    Serial.print("Front: ");
+    Serial.print(mm);
+    Serial.println(mm < FRONT_OBSTACLE_MM ? " mm  obstacle" : " mm  clear");
+  }
   delay(TEST_PRINT_MS);
 }
 
@@ -115,8 +132,8 @@ void runTests() {
     case TEST_VISION:
       testVision();
       break;
-    case TEST_IR:
-      testIR();
+    case TEST_FRONT_US:
+      testFrontUltrasonic();
       break;
   }
 }

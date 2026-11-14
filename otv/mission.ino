@@ -55,12 +55,15 @@ void armStow() { moveArmTo(ARM_STOW_DEG); }
 
 // ---- Pump (from Walter's Arduino_Pump.ino) ----
 // Fixes: D10 MOSFET gate (D6 is the right motor); no fake trigger on D2
-// (D2 is the IR sensor). PUMP_ML_PER_S is still unmeasured.
-void pumpDispenseML(float ml) {
-  unsigned long runMs = (unsigned long)(ml / PUMP_ML_PER_S * 1000.0);
+// (D2 is the front ultrasonic TRIG). PUMP_ML_PER_S is still unmeasured.
+void pumpRunMs(unsigned long ms) {
   digitalWrite(PIN_PUMP_GATE, HIGH);
-  delay(runMs);
+  delay(ms);
   digitalWrite(PIN_PUMP_GATE, LOW);
+}
+
+void pumpDispenseML(float ml) {
+  pumpRunMs((unsigned long)(ml / PUMP_ML_PER_S * 1000.0));
 }
 
 // Median of the first n values (sorts v in place). Ignores outliers that
@@ -84,17 +87,25 @@ static float medianOf(float *v, int n) {
 // exactly US_SAMPLES times; skips invalid readings (pulseIn returns 0 on
 // timeout); waits US_PING_GAP_MS between pings so old echoes off the bowl
 // aren't read; uses the median. Returns -1 if no reading was valid.
+// One HC-SR04 ping (arm or front sensor). Returns mm, or -1 if no echo.
+// The caller must leave US_PING_GAP_MS between pings.
+float pingMM(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  unsigned long duration = pulseIn(echoPin, HIGH, US_TIMEOUT_US);
+  if (duration == 0) return -1;
+  return US_MM_PER_US * duration / 2.0;
+}
+
 float readDistanceMM() {
   float readings[US_SAMPLES];
   int valid = 0;
   for (int i = 0; i < US_SAMPLES; i++) {
-    digitalWrite(PIN_US_TRIG, LOW);
-    delayMicroseconds(2);
-    digitalWrite(PIN_US_TRIG, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(PIN_US_TRIG, LOW);
-    unsigned long duration = pulseIn(PIN_US_ECHO, HIGH, US_TIMEOUT_US);
-    if (duration > 0) readings[valid++] = US_MM_PER_US * duration / 2.0;
+    float mm = pingMM(PIN_US_TRIG, PIN_US_ECHO);
+    if (mm >= 0) readings[valid++] = mm;
     delay(US_PING_GAP_MS);
   }
   if (valid == 0) return -1;

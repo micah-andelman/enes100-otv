@@ -16,6 +16,10 @@
 // SIM: 1 = ENES100 browser simulator (Tank library)
 //      0 = real robot (DRV8871 drivers)
 // TEST_MODE: 0 = full mission. Robot-only bench tests:
+// MS5_TASK: 0 = normal build. Milestone 5 demos (tools/otv.ps1: otv2..otv10).
+// Numbers match the MS5 sub-tasks; 7a/7b are 71/72.
+// Simulator only: 4, 5, 6, 71, 72. Robot only: 2, 3, 10.
+// (otv8/otv9 reuse bench tests 7 and 4, so they have no MS5_TASK.)
 
 // ---- Vision system (ENES100 library v6.2.4) ----
 // WATER comes from Enes100.h, which must be included before this file.
@@ -82,11 +86,21 @@ const unsigned long HUG_TIMEOUT_MS = 40000; // [MEASURE] 1.7 m hug at ~7 cm/s on
 // If the limbo rod hides the marker on the last leg, drive straight for the
 // remaining distance (from the last seen x and DRIVE_SPEED_MPS), capped here.
 const unsigned long LIMBO_BLIND_MAX_MS = 12000; // chosen: ~0.9 m at 7.5 cm/s
-// ---- Obstacle safety stop (MS2 nav flow: front IR sees obstacle ->
+// ---- Obstacle safety stop (MS2 nav flow: front sensor sees obstacle ->
 // stop, back up, re-route with vision). Off for the pool approach, since
 // the pool is straight ahead there.
 const int SIM_OBSTACLE_SENSOR_ID = 1; // Tank distance sensor (enabled by default)
 const float SIM_OBSTACLE_THRESH_M = 0.40; // obstacle if closer than this
+// The Tank sensor also sees the arena walls, so a reading only counts if
+// the echo point (vision pose + heading + distance) lands on an obstacle
+// column. Obstacle geometry from the Arena Details doc (see Arena above).
+const float SIM_SENSOR_FRONT_M = 0.075; // sensor ahead of the marker (sim Tank is 0.15 m long)
+const float OBST_COL1_X = 1.5; // column centers (doc)
+const float OBST_COL2_X = 2.3;
+const float OBST_HALF_W = 0.1; // obstacles are 0.2 m wide (doc)
+const float OBST_Y_MIN = 0.25; // rows span y 0.25-1.75 (doc)
+const float OBST_Y_MAX = 1.75;
+const float OBST_HIT_MARGIN_M = 0.05; // slack for vision/heading error (chosen)
 const unsigned long OBSTACLE_BACKUP_MS = 500; // reverse time per hit (chosen, not specified)
 const int MAX_OBSTACLE_HITS = 3; // give up the move after this many hits (chosen)
 // ---- Mission ----
@@ -94,7 +108,7 @@ const float SAMPLE_ML = 30.0; // requirement is >= 20 mL
 const float PUMP_ML_PER_S = 2.5; // [MEASURE] unmeasured placeholder from Walter's sketch
 const int ARM_STOW_DEG = 20; // [MEASURE] arm folded flat over the chassis (Walter's sketch: 20)
 const int ARM_DOWN_DEG = 160; // [MEASURE] arm out over the water (Walter's sketch: 160)
-const bool SERVO2_MIRRORED = false; // [MEASURE] true if servo 2 is mounted facing servo 1
+const bool SERVO2_MIRRORED = true; // servo 2 faces servo 1 (confirmed by Micah 2026-11-13)
 const unsigned long SERVO_STEP_MS = 15; // per 1 degree of sweep (limits 5 V rail spikes)
 const unsigned long ARM_SETTLE_MS = 500; // after arm down, before reading (chosen, not specified)
 const int US_SAMPLES = 25; // ultrasonic readings per measurement (median is used)
@@ -119,10 +133,29 @@ const unsigned long SIM_ARM_MS = 500; // stub delay (chosen, not specified)
 const unsigned long SIM_PUMP_MS = 1000; // stub delay (chosen, not specified)
 // ---- Bench tests (robot only) ----
 const unsigned long TEST_STEP_MS = 1000; // each drive test step
+const unsigned long TEST_PUMP_CHECK_MS = 2000; // pump test: quick on/off check
+const unsigned long TEST_PUMP_PAUSE_MS = 5000; // pump test: time to empty the measuring cup
+const unsigned long TEST_PUMP_CAL_MS = 10000; // pump test: fixed-time run; PUMP_ML_PER_S = mL / 10
 const unsigned long TEST_GAP_MS = 500; // stop between drive steps
 const unsigned long TEST_ARM_HOLD_MS = 2000;
 const unsigned long TEST_PRINT_MS = 500; // ultrasonic + color
 const unsigned long TEST_VISION_MS = 250;
+// ---- MS5 demos (MS5_TASK, see top of file) ----
+// The two #defines can be overridden from the command line
+// (otv2 -Seconds N, otv3 -TurnMs N).
+const unsigned long MS5_START_DELAY_MS = 5000; // robot demos: time to step back after power-on
+const unsigned long MS5_TURN_PAUSE_MS = 2000; // between the three turns
+const unsigned long MS5_PRINT_MS = 500; // receive demo: between pose prints
+const int MS5_RECEIVE_PRINTS = 20; // receive demo: number of pose prints
+const unsigned long MS5_ARM_HOLD_MS = 1000; // actuation demo: arm down before pumping
+// Detour demo (7b): three lanes, one per obstacle row (rows span y 0.25-1.75).
+const float MS5_LANE_LOW_Y = 0.5;
+const float MS5_LANE_MID_Y = 1.0;
+const float MS5_LANE_HIGH_Y = 1.5;
+const float MS5_DETOUR_START_X = 0.9; // line up on a lane here (just before column 1 at x 1.4)
+const float MS5_DETOUR_END_X = 2.8; // past both obstacle columns
+const float MS5_LANE_CLEAR_M = 0.6; // this far past where it was blocked, reset the tried lanes (next column)
+const unsigned long MS5_DETOUR_TIMEOUT_MS = 90000;
 // ===================== otv/otv.h =====================
 // Prototypes for every function shared across tabs.
 // The simulator gets one concatenated file and may not auto-generate
@@ -158,9 +191,13 @@ bool obstacleAhead();
 bool turnTo(float heading);
 bool driveTo(float x, float y, float stopDistance);
 bool hugWall(float xEnd);
+void logPose(const char *label);
 void runFullRun();
+void runRoute(bool toGoal); // false = stop just before the limbo (MS5 sub-task 6)
 // tests.ino (robot only)
 void runTests();
+// ms5.ino (Milestone 5 demos, MS5_TASK != 0)
+void runMs5();
 // ===================== otv/otv.ino =====================
 // OTV main sketch: Team H2Woah! (ENES100, Water Sampling)
 // setup() and loop() live here. Subsystem code lives in drive.ino,
@@ -175,7 +212,7 @@ void setup() {
   missionSetup();
   navSetup();
   // Only start vision when it is needed: hardware bench tests must run
-  // without the vision system.
+  // without the vision system. Robot MS5 demos (2, 3, 10) don't use vision.
   Enes100.begin(TEAM_NAME, TEAM_TYPE, MARKER_ID, ROOM_NUMBER, VISION_WIFI_TX, VISION_WIFI_RX);
   gVisionStarted = true;
   if (!waitForConnection(WIFI_CONNECT_MS)) logMsg("Vision system not connected, continuing");
@@ -312,9 +349,23 @@ bool waitForVision(unsigned long timeoutMs) {
   }
   return true;
 }
+// True if (x, y) is on or next to one of the two obstacle columns.
+static bool inObstacleField(float x, float y) {
+  if (y < OBST_Y_MIN - OBST_HIT_MARGIN_M || y > OBST_Y_MAX + OBST_HIT_MARGIN_M) return false;
+  if (fabs(x - OBST_COL1_X) <= OBST_HALF_W + OBST_HIT_MARGIN_M) return true;
+  if (fabs(x - OBST_COL2_X) <= OBST_HALF_W + OBST_HIT_MARGIN_M) return true;
+  return false;
+}
 bool obstacleAhead() {
   float d = Tank.readDistanceSensor(SIM_OBSTACLE_SENSOR_ID);
-  return d > 0 && d < SIM_OBSTACLE_THRESH_M;
+  if (d <= 0 || d >= SIM_OBSTACLE_THRESH_M) return false;
+  // The Tank sensor also sees the arena walls. Work out where the echo
+  // came from (vision pose + heading) and only count hits on an obstacle
+  // column, so the top wall next to the hug lane is not an "obstacle".
+  if (!Enes100.isVisible()) return true; // can't tell: be safe
+  float th = Enes100.getTheta();
+  float r = SIM_SENSOR_FRONT_M + d;
+  return inObstacleField(Enes100.getX() + r * cos(th), Enes100.getY() + r * sin(th));
 }
 // MS2 safety stop: if the front sensor sees something, stop and back up.
 // The caller re-aims from the vision position on its next loop.
@@ -406,7 +457,7 @@ bool driveTo(float x, float y, float stopDistance) {
 // the hug line in proportion to how far off it the OTV is.
 // This is the only leg that passes the obstacle columns, so it is the only
 // one that runs the front-sensor safety stop (the other legs head at the
-// pool or an arena wall, which the IR would read as an obstacle).
+// pool or an arena wall, which the front sensor would read as an obstacle).
 bool hugWall(float xEnd) {
   unsigned long start = millis();
   int hits = 0;
@@ -465,7 +516,10 @@ static void finishBlindIfVisionLost() {
 // ---------------- Full run ----------------
 // Each leg continues even if the previous one failed, to salvage
 // partial points.
-void runFullRun() {
+void runFullRun() { runRoute(true); }
+// toGoal = false stops at the limbo align point, just before the limbo
+// (MS5 sub-task 6: start -> mission site -> right before the limbo).
+void runRoute(bool toGoal) {
   logMsg("Run start");
   if (!waitForVision(VISION_START_MS)) {
     stopDrive();
@@ -502,6 +556,11 @@ void runFullRun() {
   logMsg("Limbo");
   driveTo(LIMBO_ALIGN_X, LIMBO_LANE_Y, POS_TOL_M);
   logPose("Pose at limbo align");
+  if (!toGoal) {
+    stopDrive();
+    logMsg("Stopped before the limbo");
+    return;
+  }
   turnTo(0.0);
   if (!driveTo(GOAL_X, LIMBO_LANE_Y, POS_TOL_M)) finishBlindIfVisionLost();
   stopDrive();
@@ -511,4 +570,9 @@ void runFullRun() {
 // ===================== otv/tests.ino =====================
 // Bench tests: robot only. Build with -DSIM=0 -DTEST_MODE=n.
 // All output goes to Serial at SERIAL_BAUD.
-//   1 Drive   2 Pump   3 Arm   4 Ultrasonic   5 Color   6 Vision   7 IR
+//   1 Drive   2 Pump   3 Arm   4 Arm ultrasonic   5 Color   6 Vision   7 Front ultrasonic
+// ===================== otv/ms5.ino =====================
+// Milestone 5 demos. Build with -DMS5_TASK=n (tools/otv.ps1: otv2..otv10).
+// Numbers match the MS5 sub-tasks (7a = 71, 7b = 72). See config.h.
+// runMs5() is called every loop(); one-shot demos run once, then idle.
+bool gMs5Done = false; // global: the simulator resets static locals

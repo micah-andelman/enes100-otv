@@ -7,9 +7,17 @@
 // Used to size the blind drive if the limbo hides the marker.
 float gLastX = 0;
 
+#if !SIM
+// Front ultrasonic filter state (globals, not static locals).
+unsigned long gFrontPingMs = 0;
+int gFrontHits = 0;
+#endif
+
 void navSetup() {
 #if !SIM
-  pinMode(PIN_IR, INPUT);
+  pinMode(PIN_FRONT_US_TRIG, OUTPUT);
+  digitalWrite(PIN_FRONT_US_TRIG, LOW);
+  pinMode(PIN_FRONT_US_ECHO, INPUT);
 #endif
 }
 
@@ -77,12 +85,39 @@ bool waitForVision(unsigned long timeoutMs) {
   return true;
 }
 
+#if SIM
+// True if (x, y) is on or next to one of the two obstacle columns.
+static bool inObstacleField(float x, float y) {
+  if (y < OBST_Y_MIN - OBST_HIT_MARGIN_M || y > OBST_Y_MAX + OBST_HIT_MARGIN_M) return false;
+  if (fabs(x - OBST_COL1_X) <= OBST_HALF_W + OBST_HIT_MARGIN_M) return true;
+  if (fabs(x - OBST_COL2_X) <= OBST_HALF_W + OBST_HIT_MARGIN_M) return true;
+  return false;
+}
+#endif
+
 bool obstacleAhead() {
 #if SIM
   float d = Tank.readDistanceSensor(SIM_OBSTACLE_SENSOR_ID);
-  return d > 0 && d < SIM_OBSTACLE_THRESH_M;
+  if (d <= 0 || d >= SIM_OBSTACLE_THRESH_M) return false;
+  // The Tank sensor also sees the arena walls. Work out where the echo
+  // came from (vision pose + heading) and only count hits on an obstacle
+  // column, so the top wall next to the hug lane is not an "obstacle".
+  if (!Enes100.isVisible()) return true;  // can't tell: be safe
+  float th = Enes100.getTheta();
+  float r = SIM_SENSOR_FRONT_M + d;
+  return inObstacleField(Enes100.getX() + r * cos(th), Enes100.getY() + r * sin(th));
 #else
-  return digitalRead(PIN_IR) == IR_OBSTACLE_LEVEL;
+  // Front HC-SR04: ping at most every US_PING_GAP_MS (old echoes), and
+  // only report an obstacle after FRONT_HITS_NEEDED close pings in a row.
+  // No echo (-1) = nothing in range = clear.
+  if (millis() - gFrontPingMs < US_PING_GAP_MS) return false;
+  gFrontPingMs = millis();
+  float mm = pingMM(PIN_FRONT_US_TRIG, PIN_FRONT_US_ECHO);
+  if (mm >= 0 && mm < FRONT_OBSTACLE_MM) gFrontHits++;
+  else gFrontHits = 0;
+  if (gFrontHits < FRONT_HITS_NEEDED) return false;
+  gFrontHits = 0;  // consumed: the next stop needs fresh close pings
+  return true;
 #endif
 }
 
@@ -185,7 +220,7 @@ bool driveTo(float x, float y, float stopDistance) {
 // the hug line in proportion to how far off it the OTV is.
 // This is the only leg that passes the obstacle columns, so it is the only
 // one that runs the front-sensor safety stop (the other legs head at the
-// pool or an arena wall, which the IR would read as an obstacle).
+// pool or an arena wall, which the front sensor would read as an obstacle).
 bool hugWall(float xEnd) {
   unsigned long start = millis();
   int hits = 0;
@@ -250,7 +285,11 @@ static void finishBlindIfVisionLost() {
 // ---------------- Full run ----------------
 // Each leg continues even if the previous one failed, to salvage
 // partial points.
-void runFullRun() {
+void runFullRun() { runRoute(true); }
+
+// toGoal = false stops at the limbo align point, just before the limbo
+// (MS5 sub-task 6: start -> mission site -> right before the limbo).
+void runRoute(bool toGoal) {
   logMsg("Run start");
   if (!waitForVision(VISION_START_MS)) {
     stopDrive();
@@ -292,6 +331,11 @@ void runFullRun() {
   logMsg("Limbo");
   driveTo(LIMBO_ALIGN_X, LIMBO_LANE_Y, POS_TOL_M);
   logPose("Pose at limbo align");
+  if (!toGoal) {
+    stopDrive();
+    logMsg("Stopped before the limbo");
+    return;
+  }
   turnTo(0.0);
   if (!driveTo(GOAL_X, LIMBO_LANE_Y, POS_TOL_M)) finishBlindIfVisionLost();
   stopDrive();
