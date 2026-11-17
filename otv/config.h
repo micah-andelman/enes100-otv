@@ -249,7 +249,7 @@ const int   MAX_OBSTACLE_HITS      = 3;     // give up the move after this many 
 const float SAMPLE_ML        = 30.0;   // requirement is >= 20 mL
 const float PUMP_ML_PER_S    = 2.5;    // [MEASURE] unmeasured placeholder from Walter's sketch
 const int   ARM_STOW_DEG     = 20;     // [MEASURE] arm folded flat over the chassis (Walter's sketch: 20)
-const int   ARM_DOWN_DEG     = 160;    // [MEASURE] arm out over the water (Walter's sketch: 160)
+const int   ARM_DOWN_DEG     = 96;     // mission height: arm ultrasonic parallel to the water, pump tube in it (set live with otvarm on the robot 2026-11-16; Walter's sketch had 160)
 const bool  SERVO2_MIRRORED  = true;   // servo 2 faces servo 1 (confirmed by Micah 2026-11-13)
 const unsigned long SERVO_STEP_MS = 15;  // per 1 degree of sweep (limits 5 V rail spikes)
 const unsigned long ARM_SETTLE_MS = 500; // after arm down, before reading (chosen, not specified)

@@ -73,7 +73,7 @@ Runs once: sweep down, hold 2 s, sweep back to stow.
 
 - [ ] At power-up the arm jumps to stow (normal).
 - [ ] **Stow (20°):** arm lies flat over the chassis and the robot is under 18.4 cm tall (limbo).
-- [ ] **Down (160°):** sensors at the end of the arm hang over where the water will be.
+- [ ] **Down (96°):** arm ultrasonic parallel to the water, pump tube in the water.
 - [ ] Both servos move the same way. If one fights the other, set `SERVO2_MIRRORED = true`.
 - [ ] Arduino doesn't reset during the sweep (5 V rail OK).
 
