@@ -23,15 +23,16 @@
 #define TEST_COLOR       5
 #define TEST_VISION      6
 #define TEST_FRONT_US    7
+#define TEST_ARM_CAL     8
 #ifndef TEST_MODE
 #define TEST_MODE TEST_NONE
 #endif
 
-#if (TEST_MODE < TEST_NONE) || (TEST_MODE > TEST_FRONT_US)
-#error "TEST_MODE must be 0..7"
+#if (TEST_MODE < TEST_NONE) || (TEST_MODE > TEST_ARM_CAL)
+#error "TEST_MODE must be 0..8"
 #endif
 #if SIM && (TEST_MODE != TEST_NONE)
-#error "Bench tests (TEST_MODE 1-7) are robot-only. Build with -DSIM=0."
+#error "Bench tests (TEST_MODE 1-8) are robot-only. Build with -DSIM=0."
 #endif
 
 // MS5_TASK: 0 = normal build. Milestone 5 demos (tools/otv.ps1: otv2..otv10).
@@ -288,6 +289,8 @@ const unsigned long TEST_GAP_MS        = 500;   // stop between drive steps
 const unsigned long TEST_ARM_HOLD_MS   = 2000;
 const unsigned long TEST_PRINT_MS      = 500;   // ultrasonic + color
 const unsigned long TEST_VISION_MS     = 250;
+const unsigned long CAL_PRINT_MS       = 1000;  // test 8: live arm/depth/front line
+const int           CAL_LIVE_SAMPLES   = 5;     // test 8: pings per live arm reading (save uses US_SAMPLES)
 
 // ---- MS5 demos (MS5_TASK, see top of file) ----
 // The two #defines can be overridden from the command line

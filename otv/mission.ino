@@ -54,6 +54,10 @@ static void moveArmTo(int target) {
 void armDown() { moveArmTo(ARM_DOWN_DEG); }
 void armStow() { moveArmTo(ARM_STOW_DEG); }
 
+// Bench test 8 (live arm calibration).
+void armMoveTo(int deg) { moveArmTo(constrain(deg, 0, 180)); }
+int armGetAngle() { return armAngle; }
+
 // ---- Pump (from Walter's Arduino_Pump.ino) ----
 // Fixes: D10 MOSFET gate (D6 is the right motor); no fake trigger on D2
 // (D2 is the front ultrasonic TRIG). PUMP_ML_PER_S is still unmeasured.
@@ -101,10 +105,12 @@ float pingMM(int trigPin, int echoPin) {
   return US_MM_PER_US * duration / 2.0;
 }
 
-float readDistanceMM() {
+// Median of n arm pings (n <= US_SAMPLES). -1 if none echoed.
+float readDistanceSamplesMM(int n) {
   float readings[US_SAMPLES];
   int valid = 0;
-  for (int i = 0; i < US_SAMPLES; i++) {
+  if (n > US_SAMPLES) n = US_SAMPLES;
+  for (int i = 0; i < n; i++) {
     float mm = pingMM(PIN_US_TRIG, PIN_US_ECHO);
     if (mm >= 0) readings[valid++] = mm;
     delay(US_PING_GAP_MS);
@@ -112,6 +118,8 @@ float readDistanceMM() {
   if (valid == 0) return -1;
   return medianOf(readings, valid);
 }
+
+float readDistanceMM() { return readDistanceSamplesMM(US_SAMPLES); }
 
 // Depth logic is owned by the depth teammate.
 // Team method: depth = sensor height above bowl bottom - distance to the

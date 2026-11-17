@@ -34,6 +34,7 @@ likely thing to damage something later.
 | 3 | Arm | Arm built, clear space around it | `ARM_STOW_DEG`, `ARM_DOWN_DEG`, `SERVO2_MIRRORED` |
 | 2 | Pump | Cup of water, measuring cup or syringe | `PUMP_ML_PER_S` |
 | 4 | Ultrasonic | Arm down over a bowl, ruler | `SENSOR_HEIGHT_MM` |
+| 8 | Arm + depth calibration | Bowl, water, ruler | `ARM_DOWN_DEG`, `ARM_STOW_DEG`, `SENSOR_HEIGHT_MM` (replaces 3 + 4) |
 | 5 | Color | Clean water + the plastic debris | `COLOR_POLLUTED_THRESH` |
 | 6 | Vision | Lab 1120 arena, marker 80 on top | nothing (confirms WiFi + marker) |
 
@@ -100,6 +101,36 @@ Arm sensor (TRIG D7, ECHO D8). Prints the median of 25 pings in mm every ~2 s.
   - 30 mm → ______
   - 40 mm → ______
 - [ ] Readings are steady. `FAILED (no echo)` lines are not data.
+
+## 8. Arm + depth calibration (`TEST_MODE=8`, `otvarm`, menu `a`)
+
+Interactive. Type a command + Enter in the monitor. Every second it prints:
+`arm 150 deg | arm US 87.3 mm | depth 31 mm -> sends 30 | front 405 mm`
+(depth only once the sensor height is set).
+
+| Command | Does |
+|---|---|
+| `150` | sweep the arm to 150° (0–180) |
+| `+` / `-`, `+5` / `-5` | nudge 1° / 5° |
+| `d` | keep this angle as `ARM_DOWN_DEG` |
+| `s` | keep this angle as `ARM_STOW_DEG` |
+| `e` | empty bowl under the sensor: reading → `SENSOR_HEIGHT_MM` |
+| `k30` | water known to be 30 mm deep: `SENSOR_HEIGHT_MM` = reading + 30 |
+| `p` | pump 2 s |
+| `?` | help + the three lines to paste into `otv/config.h` |
+
+Nothing is stored on the board. Paste the `?` lines into `config.h`.
+
+- [ ] Kill switch ON (servos need the 5 V rail).
+- [ ] Stow: nudge until the arm lies flat, `s`. Check the OTV is under 18.4 cm tall.
+- [ ] Down: robot at the pool edge as in the mission, deepest water (40 mm). Nudge until
+      the pump tube is in the water and the color sensor is clearly above it, `d`.
+      Check at 20 mm water that the tube still reaches. If no angle does both, the tube
+      must hang lower than the color sensor (mechanical fix).
+- [ ] At that down angle: `e` over the empty bowl (or `k30` with 30 mm of water).
+- [ ] Fill 20 / 30 / 40 mm: the live `depth` is within 4 mm and `sends` is right.
+- [ ] `p` with the tube in water: water flows.
+- [ ] `?`, paste the lines into `config.h`, re-run `otv10` to check.
 
 ## 5. Color (`TEST_MODE=5`)
 

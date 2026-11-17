@@ -5,7 +5,8 @@
 #   otvhelp                 list the commands
 #   otvconnect              find the plugged-in board (Tank Mega or robot R4) and its COM port
 #   otvrun                  compile + upload the full mission to whatever is plugged in
-#   otvrun robot -Test 1    robot bench test (TEST_MODE 1-7, see docs/bench-tests.md)
+#   otvrun robot -Test 1    robot bench test (TEST_MODE 1-8, see docs/bench-tests.md)
+#   otvarm                  live arm angle + depth calibration (bench test 8, type commands)
 #   otvbuild [tank|robot]   compile only (no board needed)
 #   otvvision               open the vision system page (room 1120)
 #   otvmonitor              Serial monitor (robot only; SIM/Tank builds print nothing)
@@ -74,7 +75,10 @@ function otvhelp {
   otvrun tank             force the Tank build (SIM=1, Mega)
   otvrun robot            force the robot build (SIM=0, R4)
   otvrun robot -Test N    robot bench test: 1 drive, 2 pump, 3 arm, 4 ultrasonic,
-                          5 color, 6 vision print, 7 front ultrasonic
+                          5 color, 6 vision print, 7 front ultrasonic, 8 arm cal
+  otvarm                  robot: live arm + depth calibration. Type an angle (150), +/-,
+                          d/s to keep down/stow, e (empty bowl) or k30 (30 mm water)
+                          for SENSOR_HEIGHT_MM, p pump, ? for the config.h lines
   otvbuild [tank|robot]   compile only, no board needed
   otvvision               open the vision system page (room 1120)
   otvmonitor              Serial monitor at 115200 (robot only)
@@ -368,6 +372,19 @@ known heights and compare. Ctrl+C to quit.
 "@ -Monitor
 }
 
+# Bench test 8: set the arm angles and the depth sensor height live.
+function otvarm {
+    Invoke-OtvRobotTask 'arm + depth calibration (bench test 8)' '-DTEST_MODE=8' @"
+Kill switch ON. Type a command + Enter:
+  150 = move arm to 150 deg   + / - = 1 deg (+5 / -5)
+  d = keep this angle as ARM_DOWN_DEG (color sensor above water, tube in it)
+  s = keep this angle as ARM_STOW_DEG
+  e = empty bowl under the arm -> SENSOR_HEIGHT_MM    k30 = water is 30 mm deep
+  p = pump 2 s    ? = print the lines to paste into otv/config.h
+Live line every second: arm angle, arm ultrasonic, depth, front ultrasonic.
+"@ -Monitor
+}
+
 function otv10 {
     Invoke-OtvRobotTask '10 mission actuation (arm + pump)' '-DMS5_TASK=10' @"
 Kill switch ON (servos and pump need battery power). Press Enter in the
@@ -409,11 +426,12 @@ $script:OtvMenu = @(
     @{ Section = 'FULL MISSION + BENCH TESTS' }
     @{ Key = 'r';  Title = 'Full mission (robot)';  When = 'needs the vision system in the room';           Run = { otvrun robot } }
     @{ Key = 't';  Title = 'Full mission (Tank)';   When = 'Tank power OFF while on USB';                   Run = { otvrun tank } }
-    @{ Key = 'b';  Title = 'Bench test';            When = '1 drive 2 pump 3 arm 4 depth 5 color 6 vision 7 front'; Run = {
-        $n = Read-OtvNumber 'Bench test number (1-7)' 1
-        if ($n -lt 1 -or $n -gt 7) { Write-Otv 'Bench tests are 1-7.' Red; return }
+    @{ Key = 'b';  Title = 'Bench test';            When = '1 drive 2 pump 3 arm 4 depth 5 color 6 vision 7 front 8 arm cal'; Run = {
+        $n = Read-OtvNumber 'Bench test number (1-8)' 1
+        if ($n -lt 1 -or $n -gt 8) { Write-Otv 'Bench tests are 1-8.' Red; return }
         otvrun robot -Test $n
         otvmonitor } }
+    @{ Key = 'a';  Title = 'Arm + depth calibration'; When = 'type angles live; prints config.h values';     Run = { otvarm } }
     @{ Section = 'TOOLS' }
     @{ Key = 'm';  Title = 'Serial monitor';        When = 'robot on USB';                                  Run = { otvmonitor } }
     @{ Key = 'c';  Title = 'Find the board';        When = 'which board + COM port is plugged in';          Run = { otvconnect } }

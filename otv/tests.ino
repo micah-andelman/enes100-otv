@@ -1,6 +1,7 @@
 // Bench tests: robot only. Build with -DSIM=0 -DTEST_MODE=n.
 // All output goes to Serial at SERIAL_BAUD.
 //   1 Drive   2 Pump   3 Arm   4 Arm ultrasonic   5 Color   6 Vision   7 Front ultrasonic
+//   8 Arm + depth calibration (interactive: type commands in the monitor)
 
 #if !SIM
 
@@ -107,6 +108,124 @@ static void testFrontUltrasonic() {
 
 bool gTestDone = false;
 
+// ---- 8: live arm + depth calibration ----
+// Type a command + Enter in otvmonitor. Every second it prints the arm
+// angle, the arm ultrasonic, the depth it would compute, and the front
+// ultrasonic. Nothing is saved on the board: '?' prints the lines to
+// copy into config.h.
+int gCalDownDeg = ARM_DOWN_DEG;
+int gCalStowDeg = ARM_STOW_DEG;
+float gCalHeightMM = SENSOR_HEIGHT_MM;
+char gCalLine[16];
+int gCalLen = 0;
+unsigned long gCalLastPrint = 0;
+
+static void calHelp() {
+  Serial.println("ARM CAL commands (type, then Enter):");
+  Serial.println("  150      move the arm to 150 deg (any 0-180)");
+  Serial.println("  + / -    nudge 1 deg   (+5 / -5 = 5 deg)");
+  Serial.println("  d        use this angle as ARM_DOWN_DEG (color sensor above water, tube in it)");
+  Serial.println("  s        use this angle as ARM_STOW_DEG (folded flat)");
+  Serial.println("  e        EMPTY bowl under the arm: reading becomes SENSOR_HEIGHT_MM");
+  Serial.println("  k30      water is known to be 30 mm deep: SENSOR_HEIGHT_MM = reading + 30");
+  Serial.println("  p        pump 2 s (kill switch ON)");
+  Serial.println("  ?        this help + the values to paste into config.h");
+}
+
+static void calSummary() {
+  Serial.println("---- paste into otv/config.h ----");
+  Serial.print("const int   ARM_STOW_DEG     = "); Serial.print(gCalStowDeg); Serial.println(";");
+  Serial.print("const int   ARM_DOWN_DEG     = "); Serial.print(gCalDownDeg); Serial.println(";");
+  Serial.print("const float SENSOR_HEIGHT_MM = "); Serial.print(gCalHeightMM, 1); Serial.println(";");
+  Serial.println("(calibrate SENSOR_HEIGHT_MM with the arm at ARM_DOWN_DEG)");
+  Serial.println("---------------------------------");
+}
+
+// Full 25-ping median for saving a value. -1 = failed.
+static float calSaveReading() {
+  Serial.println("Measuring (25 pings, hold still)...");
+  float mm = readDistanceMM();
+  if (mm < 0) Serial.println("FAILED: no echo. Nothing saved.");
+  return mm;
+}
+
+static void calCommand(const char *cmd) {
+  char c = cmd[0];
+  if (c >= '0' && c <= '9') {
+    armMoveTo(atoi(cmd));
+  } else if (c == '+' || c == '-') {
+    int step = (cmd[1] >= '0' && cmd[1] <= '9') ? atoi(cmd + 1) : 1;
+    armMoveTo(armGetAngle() + (c == '+' ? step : -step));
+  } else if (c == 'd') {
+    gCalDownDeg = armGetAngle();
+    Serial.print("ARM_DOWN_DEG = "); Serial.println(gCalDownDeg);
+    if (gCalHeightMM > 0) Serial.println("Re-do 'e' or 'k' at this angle (the height changes with the angle).");
+  } else if (c == 's') {
+    gCalStowDeg = armGetAngle();
+    Serial.print("ARM_STOW_DEG = "); Serial.println(gCalStowDeg);
+  } else if (c == 'e') {
+    float mm = calSaveReading();
+    if (mm >= 0) { gCalHeightMM = mm; Serial.print("SENSOR_HEIGHT_MM = "); Serial.println(mm, 1); }
+  } else if (c == 'k') {
+    int known = atoi(cmd + 1);
+    if (known <= 0) { Serial.println("Give the depth: k20, k30 or k40"); return; }
+    float mm = calSaveReading();
+    if (mm >= 0) { gCalHeightMM = mm + known; Serial.print("SENSOR_HEIGHT_MM = "); Serial.println(gCalHeightMM, 1); }
+  } else if (c == 'p') {
+    Serial.println("Pump on 2 s");
+    pumpRunMs(TEST_PUMP_CHECK_MS);
+    Serial.println("Pump off");
+  } else if (c == '?' || c == 'h') {
+    calHelp();
+    calSummary();
+  } else {
+    Serial.print("Unknown command: "); Serial.println(cmd);
+    calHelp();
+  }
+  gCalLastPrint = 0;  // print a live line right away
+}
+
+static void calLivePrint() {
+  Serial.print("arm "); Serial.print(armGetAngle());
+  Serial.print(" deg | arm US ");
+  float mm = readDistanceSamplesMM(CAL_LIVE_SAMPLES);
+  if (mm < 0) Serial.print("no echo");
+  else { Serial.print(mm, 1); Serial.print(" mm"); }
+  if (gCalHeightMM > 0 && mm >= 0) {
+    int raw = (int)round(gCalHeightMM - mm);
+    Serial.print(" | depth "); Serial.print(raw);
+    Serial.print(" mm -> sends "); Serial.print(snapDepthMM(raw));
+  }
+  delay(US_PING_GAP_MS);
+  float front = pingMM(PIN_FRONT_US_TRIG, PIN_FRONT_US_ECHO);
+  Serial.print(" | front ");
+  if (front < 0) Serial.println("no echo");
+  else { Serial.print(front, 0); Serial.println(" mm"); }
+}
+
+static void testArmCal() {
+  if (!gTestDone) {
+    gTestDone = true;
+    calHelp();
+  }
+  while (Serial.available()) {
+    char ch = Serial.read();
+    if (ch == '\n' || ch == '\r') {
+      if (gCalLen > 0) {
+        gCalLine[gCalLen] = 0;
+        gCalLen = 0;
+        calCommand(gCalLine);
+      }
+    } else if (ch != ' ' && gCalLen < (int)sizeof(gCalLine) - 1) {
+      gCalLine[gCalLen++] = ch;
+    }
+  }
+  if (gCalLastPrint == 0 || millis() - gCalLastPrint >= CAL_PRINT_MS) {
+    gCalLastPrint = millis();
+    calLivePrint();
+  }
+}
+
 // Called every loop(). One-shot tests run once, then idle with motors
 // and pump off. Print tests repeat forever.
 void runTests() {
@@ -134,6 +253,9 @@ void runTests() {
       break;
     case TEST_FRONT_US:
       testFrontUltrasonic();
+      break;
+    case TEST_ARM_CAL:
+      testArmCal();
       break;
   }
 }

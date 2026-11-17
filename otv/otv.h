@@ -29,6 +29,9 @@ void runMission();
 #if !SIM
 bool colorIsPolluted(int r, int g, int b);  // shared by isPolluted() and bench test 5
 float pingMM(int trigPin, int echoPin);     // one HC-SR04 ping, -1 = no echo
+float readDistanceSamplesMM(int n);         // median of n arm pings (bench test 8)
+void armMoveTo(int deg);                    // sweep arm to 0..180 (bench test 8)
+int armGetAngle();
 #endif
 void pumpRunMs(unsigned long ms);  // pump on for a fixed time (bench test 2, MS5 10; sim: stub delay)
 
