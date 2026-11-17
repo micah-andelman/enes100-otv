@@ -296,7 +296,7 @@ const unsigned long TEST_VISION_MS     = 250;
 #define MS5_FORWARD_MS 45000  // 45 s at DRIVE_SPEED_MPS 7.5 cm/s = ~3.4 m (the MS5 distance; catching allowed). otv2 -Seconds N to adjust
 #endif
 #ifndef MS5_TURN90_MS
-#define MS5_TURN90_MS 1900    // [MEASURE] spin-in-place time for 90 deg at DRIVE_PWM
+#define MS5_TURN90_MS 950     // [MEASURE] spin-in-place time for 90 deg at DRIVE_PWM (1900 turned 180, 2026-11-16)
 #endif
 #if SIM
 const unsigned long MS5_START_DELAY_MS = 1000;  // sim dry runs of 2/3: nobody needs to step back

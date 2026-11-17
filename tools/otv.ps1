@@ -87,7 +87,7 @@ function otvhelp {
 
 MS5 demos (numbers = MS5 sub-tasks):
   otv2 [-Seconds 45]      robot: drive straight ~3.4 m, open loop (time = distance / DRIVE_SPEED_MPS)
-  otv3 [-TurnMs 1900]     robot: three timed 90 deg turns
+  otv3 [-TurnMs 950]      robot: three timed 90 deg turns
   otv4                    sim: wireless receive (prints x, y, theta)
   otv5                    sim: wireless transmit (mission messages)
   otv6                    sim: start -> mission site -> before the limbo
@@ -327,13 +327,13 @@ Next:
 }
 
 function otv3 {
-    param([int]$TurnMs = 1900)
+    param([int]$TurnMs = 950)
     Invoke-OtvRobotTask "3 turning (3 x 90 deg, $TurnMs ms each)" "-DMS5_TASK=3 -DMS5_TURN90_MS=$TurnMs" @"
 Next:
   1. Unplug USB. Set the OTV on the arena floor.
   2. Flip the kill switch and step back. It starts 5 s later.
   3. Three counter-clockwise turns, 2 s apart.
-  Short of 90 deg: otv3 -TurnMs 2100. Past 90 deg: otv3 -TurnMs 1700.
+  Short of 90 deg: otv3 -TurnMs 1050. Past 90 deg: otv3 -TurnMs 850.
   Then put the final value in config.h (MS5_TURN90_MS).
 "@
 }
@@ -391,7 +391,7 @@ function Read-OtvNumber([string]$Prompt, [int]$Default) {
 $script:OtvMenu = @(
     @{ Section = 'MS5 ON THE ROBOT   (plug the OTV in over USB first)' }
     @{ Key = '2';  Title = 'Forward 3.4 m';         When = 'uploads, then unplug + kill switch; catch it';  Run = { otv2 -Seconds (Read-OtvNumber 'Seconds to drive' 45) } }
-    @{ Key = '3';  Title = '3 x 90 deg turns';      When = 'uploads, then unplug + kill switch';            Run = { otv3 -TurnMs (Read-OtvNumber 'ms per 90 deg turn' 1900) } }
+    @{ Key = '3';  Title = '3 x 90 deg turns';      When = 'uploads, then unplug + kill switch';            Run = { otv3 -TurnMs (Read-OtvNumber 'ms per 90 deg turn' 950) } }
     @{ Key = '8';  Title = 'Obstacle sensor';       When = 'stays on USB; live front ultrasonic readout';   Run = { otv8 } }
     @{ Key = '9';  Title = 'Mission (depth) sensor';When = 'stays on USB; live arm ultrasonic readout';     Run = { otv9 } }
     @{ Key = '10'; Title = 'Arm + pump';            When = 'USB + kill switch ON; Enter runs it';           Run = { otv10 } }

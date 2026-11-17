@@ -39,7 +39,7 @@ Flip `LEFT_INVERT` / `RIGHT_INVERT` in `config.h` if not.
 | Sub-task | Command / key | Steps |
 |---|---|---|
 | 2 forward 3.4 m (required) | `otv2 -Seconds 45` / `2` | upload, unplug, OTV in the landing zone facing the limbo, kill switch, step back (starts 5 s later), catch it past 3.4 m. Too short or long: change the seconds (distance = seconds x speed). |
-| 3 three 90° turns | `otv3 -TurnMs 1900` / `3` | upload, unplug, kill switch. Under- or over-turning: scale TurnMs (e.g. 80° each -> 1900 x 90/80). Tune it once before the demo. |
+| 3 three 90° turns | `otv3 -TurnMs 950` / `3` | upload, unplug, kill switch. Under- or over-turning: scale TurnMs (e.g. 80° each -> 950 x 90/80). Tune it once before the demo. |
 | 8 obstacle sensor | `otv8` / `8` | stays on USB; move a box toward the front sensor; mm readout and `obstacle` under 150 mm |
 | 9 mission (depth) sensor | `otv9` / `9` | stays on USB; arm ultrasonic mm readout over a ruler / the bowl |
 | 10 arm + pump | `otv10` / `10` | USB + kill switch ON; press Enter: arm down, pump 2 s, arm stow; repeatable |
