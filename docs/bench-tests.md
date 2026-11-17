@@ -116,7 +116,7 @@ Interactive. Type a command + Enter in the monitor. Every second it prints:
 | `s` | keep this angle as `ARM_STOW_DEG` |
 | `e` | empty bowl under the sensor: reading → `SENSOR_HEIGHT_MM` |
 | `k30` | water known to be 30 mm deep: `SENSOR_HEIGHT_MM` = reading + 30 |
-| `p` | pump 2 s |
+| `p`, `p7` | pump 2 s / 7 s (max 30) |
 | `?` | help + the three lines to paste into `otv/config.h` |
 
 Nothing is stored on the board. Paste the `?` lines into `config.h`.

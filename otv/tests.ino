@@ -128,7 +128,7 @@ static void calHelp() {
   Serial.println("  s        use this angle as ARM_STOW_DEG (folded flat)");
   Serial.println("  e        EMPTY bowl under the arm: reading becomes SENSOR_HEIGHT_MM");
   Serial.println("  k30      water is known to be 30 mm deep: SENSOR_HEIGHT_MM = reading + 30");
-  Serial.println("  p        pump 2 s (kill switch ON)");
+  Serial.println("  p        pump 2 s (p7 = 7 s; kill switch ON)");
   Serial.println("  ?        this help + the values to paste into config.h");
 }
 
@@ -172,8 +172,10 @@ static void calCommand(const char *cmd) {
     float mm = calSaveReading();
     if (mm >= 0) { gCalHeightMM = mm + known; Serial.print("SENSOR_HEIGHT_MM = "); Serial.println(gCalHeightMM, 1); }
   } else if (c == 'p') {
-    Serial.println("Pump on 2 s");
-    pumpRunMs(TEST_PUMP_CHECK_MS);
+    int secs = atoi(cmd + 1);
+    unsigned long ms = (secs > 0) ? (unsigned long)min(secs, CAL_PUMP_MAX_S) * 1000UL : TEST_PUMP_CHECK_MS;
+    Serial.print("Pump on "); Serial.print(ms / 1000); Serial.println(" s");
+    pumpRunMs(ms);
     Serial.println("Pump off");
   } else if (c == '?' || c == 'h') {
     calHelp();

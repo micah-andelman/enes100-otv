@@ -380,7 +380,7 @@ Kill switch ON. Type a command + Enter:
   d = keep this angle as ARM_DOWN_DEG (color sensor above water, tube in it)
   s = keep this angle as ARM_STOW_DEG
   e = empty bowl under the arm -> SENSOR_HEIGHT_MM    k30 = water is 30 mm deep
-  p = pump 2 s    ? = print the lines to paste into otv/config.h
+  p = pump 2 s (p7 = 7 s)    ? = print the lines to paste into otv/config.h
 Live line every second: arm angle, arm ultrasonic, depth, front ultrasonic.
 "@ -Monitor
 }

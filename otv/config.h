@@ -290,6 +290,7 @@ const unsigned long TEST_ARM_HOLD_MS   = 2000;
 const unsigned long TEST_PRINT_MS      = 500;   // ultrasonic + color
 const unsigned long TEST_VISION_MS     = 250;
 const unsigned long CAL_PRINT_MS       = 1000;  // test 8: live arm/depth/front line
+const int           CAL_PUMP_MAX_S     = 30;    // test 8: longest 'pN' pump run
 const int           CAL_LIVE_SAMPLES   = 5;     // test 8: pings per live arm reading (save uses US_SAMPLES)
 
 // ---- MS5 demos (MS5_TASK, see top of file) ----
