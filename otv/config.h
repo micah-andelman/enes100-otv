@@ -68,7 +68,8 @@ const int   COLOR_POLLUTED_THRESH = 400; // color sensor cutoff. Clean water rea
 
 // MS5_TASK: 0 = normal build. Milestone 5 demos (tools/otv.ps1: otv2..otv10).
 // Numbers match the MS5 sub-tasks; 7a/7b are 71/72.
-// Simulator only: 4, 5, 6, 71, 72, 8. Robot: 2, 3, 10 (these three also build
+// Simulator only: 4, 5, 6, 71, 72, 8 (4 and 5 also run on the physical Tank
+// with the real vision system: otv4tank / otv5tank, numbers in the terminal). Robot: 2, 3, 10 (these three also build
 // with SIM=1 as simulator dry runs: otv2sim, otv3sim, otv10sim).
 // Robot otv8/otv9 reuse bench tests 7 and 4; MS5_TASK 8 is the sim version of 8.
 #define MS5_NONE      0
@@ -97,7 +98,18 @@ const int   COLOR_POLLUTED_THRESH = 400; // color sensor cutoff. Clean water rea
 #endif
 #endif
 
-#if SIM
+// Physical ENES100 Tank = SIM=1 built for its Mega. Unlike the browser
+// simulator it has USB Serial, so it also prints to the terminal.
+#if SIM && defined(ARDUINO_AVR_MEGA2560)
+#define TANK_HW 1
+#else
+#define TANK_HW 0
+#endif
+#define HAS_SERIAL (!SIM || TANK_HW)
+
+#if TANK_HW
+#pragma message "OTV build target: PHYSICAL TANK"
+#elif SIM
 #pragma message "OTV build target: SIMULATOR"
 #else
 #pragma message "OTV build target: ROBOT"
@@ -107,7 +119,10 @@ const int   COLOR_POLLUTED_THRESH = 400; // color sensor cutoff. Clean water rea
 // WATER comes from Enes100.h, which must be included before this file.
 const char* const TEAM_NAME = "H2Woah!";
 const byte TEAM_TYPE        = WATER;
-#if SIM
+// -DMARKER_OVERRIDE=n uses another marker (otv4tank/otv5tank -Marker n).
+#if defined(MARKER_OVERRIDE)
+const int MARKER_ID         = MARKER_OVERRIDE;
+#elif SIM
 const int MARKER_ID         = 54;  // ENES100 physical Tank (Tank-mode builds)
 #else
 const int MARKER_ID         = 80;  // our OTV
@@ -319,6 +334,7 @@ const unsigned long MS5_START_DELAY_MS = 5000;  // robot demos: time to step bac
 const unsigned long MS5_TURN_PAUSE_MS  = 2000;  // between the three turns
 const unsigned long MS5_PRINT_MS       = 500;   // receive demo: between pose prints
 const int           MS5_RECEIVE_PRINTS = 20;    // receive demo: number of pose prints
+const unsigned long MS5_TANK_RESEND_MS = 15000; // Tank transmit demo: resend the mission messages this often
 const unsigned long MS5_ARM_HOLD_MS    = 1000;  // actuation demo: arm down before pumping
 // Detour demo (7b): three lanes, one per obstacle row (rows span y 0.25-1.75).
 const float MS5_LANE_LOW_Y   = 0.5;

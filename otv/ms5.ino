@@ -105,6 +105,86 @@ static void ms5Actuate() {
 }
 #endif
 
+// ---------------- Physical Tank: sub-tasks 4 + 5, real vision system ----------------
+// Upload over USB with the Tank power OFF, unplug, then power on (the Tank
+// doesn't drive in these). Every line goes to the vision system's team
+// console, which otvwatch prints in PowerShell; on USB it also goes to Serial.
+#if TANK_HW
+unsigned long gTankLastPrint = 0;
+unsigned long gTankLastSend = 0;
+int gTankSends = 0;
+int gTankDepthMM = SIM_DEPTH_MM;
+bool gTankPolluted = SIM_POLLUTED;
+char gTankLine[8];
+int gTankLen = 0;
+char gTankOut[96];
+
+// Throttled "still connecting" line (Serial only: no WiFi yet).
+static bool tankConnected() {
+  if (Enes100.isConnected()) return true;
+  if (millis() - gTankLastPrint >= MS5_PRINT_MS * 2) {
+    gTankLastPrint = millis();
+    Serial.println("Vision system: not connected yet (WiFi)...");
+  }
+  return false;
+}
+
+// Sub-task 4: print what the Arduino receives from the vision system.
+// dtostrf: AVR printf has no %f.
+static void ms5TankReceive() {
+  if (!tankConnected()) return;
+  if (millis() - gTankLastPrint < MS5_PRINT_MS) return;
+  gTankLastPrint = millis();
+  if (!Enes100.isVisible()) {
+    snprintf(gTankOut, sizeof(gTankOut), "Received: marker %d NOT VISIBLE", MARKER_ID);
+    logMsg(gTankOut);
+    return;
+  }
+  char xs[10], ys[10], ts[10], ds[10];
+  float th = Enes100.getTheta();
+  dtostrf(Enes100.getX(), 1, 3, xs);
+  dtostrf(Enes100.getY(), 1, 3, ys);
+  dtostrf(th, 1, 3, ts);
+  dtostrf(th * 180.0 / PI, 1, 1, ds);
+  snprintf(gTankOut, sizeof(gTankOut), "Received x=%s m  y=%s m  theta=%s rad (%s deg)", xs, ys, ts, ds);
+  logMsg(gTankOut);
+}
+
+static void tankSendMission() {
+  Enes100.mission(DEPTH, gTankDepthMM);
+  Enes100.mission(WATER_TYPE, gTankPolluted ? FRESH_POLLUTED : FRESH_UNPOLLUTED);
+  gTankSends++;
+  gTankLastSend = millis();
+  snprintf(gTankOut, sizeof(gTankOut), "Sent #%d: DEPTH = %d mm, WATER_TYPE = %s", gTankSends, gTankDepthMM,
+           gTankPolluted ? "FRESH_POLLUTED" : "FRESH_UNPOLLUTED");
+  logMsg(gTankOut);
+}
+
+// Sub-task 5: send the mission messages once connected, then every
+// MS5_TANK_RESEND_MS (no keyboard once USB is unplugged). On USB:
+// Enter = send now, 20/30/40 = depth, p/u = polluted/unpolluted.
+static void ms5TankTransmit() {
+  if (!tankConnected()) return;
+  if (gTankSends == 0 || millis() - gTankLastSend >= MS5_TANK_RESEND_MS) {
+    tankSendMission();
+    return;
+  }
+  while (Serial.available()) {
+    char ch = Serial.read();
+    if (ch != '\n' && ch != '\r') {
+      if (ch != ' ' && gTankLen < (int)sizeof(gTankLine) - 1) gTankLine[gTankLen++] = ch;
+      continue;
+    }
+    gTankLine[gTankLen] = 0;
+    if (gTankLen > 0 && gTankLine[0] >= '0' && gTankLine[0] <= '9') gTankDepthMM = atoi(gTankLine);
+    else if (gTankLine[0] == 'p') gTankPolluted = true;
+    else if (gTankLine[0] == 'u') gTankPolluted = false;
+    gTankLen = 0;
+    tankSendMission();
+  }
+}
+#endif  // TANK_HW
+
 // ---------------- Simulator demos (vision) ----------------
 #if SIM
 
@@ -264,6 +344,10 @@ static void ms5Sense() {
 void runMs5() {
 #if (MS5_TASK == MS5_ACTUATE) && !SIM
   ms5Actuate();
+#elif TANK_HW && (MS5_TASK == MS5_RECEIVE)
+  ms5TankReceive();
+#elif TANK_HW && (MS5_TASK == MS5_TRANSMIT)
+  ms5TankTransmit();
 #else
   if (gMs5Done) {
     stopDrive();

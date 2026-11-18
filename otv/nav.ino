@@ -26,14 +26,14 @@ void navSetup() {
 // Enes100.println only works once the vision system has started.
 // The simulator has no Serial.
 void logMsg(const char *msg) {
-#if !SIM
+#if HAS_SERIAL
   Serial.println(msg);
 #endif
   if (gVisionStarted) Enes100.println(msg);
 }
 
 void logVal(const char *label, float value) {
-#if !SIM
+#if HAS_SERIAL
   Serial.print(label);
   Serial.println(value);
 #endif

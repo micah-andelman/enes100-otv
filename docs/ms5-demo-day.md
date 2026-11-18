@@ -27,6 +27,26 @@ switch it to fullscreen (F11): fullscreen runs hit obstacles in testing.
 | 7 obstacles (wall hug) | `otv7a` / `7a` | full route: mission site, past all obstacles, under the limbo, goal |
 | 7 obstacles (detour) | `otv7b` / `7b` | drives at an obstacle, sees it, backs up, changes lane, gets past |
 
+### 4 and 5 on the physical Tank (real vision system, room 1120)
+
+The team does 4 and 5 with the Tank and the real vision system. The Tank
+doesn't drive for these, so it stays on USB with its **power switch OFF**: USB
+powers the Mega and its WiFi module, and the numbers print in PowerShell.
+
+1. Tank power OFF. Plug the Tank's Mega into the laptop over USB.
+2. Put the Tank in the arena, marker 54 facing up.
+3. Run the command. It uploads, then opens the monitor. It prints
+   `Connecting to the vision system...`, then `Vision system connected` (up to 30 s).
+
+| Sub-task | Command / key | What the grader sees |
+|---|---|---|
+| 4 wireless receive | `otv4tank` / `4t` | `Received  x = ... m   y = ... m   theta = ... rad (... deg)` twice a second; move/turn the Tank by hand and the numbers follow |
+| 5 wireless transmit | `otv5tank` / `5t` | `Sent #1: DEPTH = 30 mm   WATER_TYPE = FRESH_UNPOLLUTED`, and the same messages on the vision computer. Enter = send again, `20`/`30`/`40` = depth, `p`/`u` = polluted/unpolluted |
+
+If it stays on `not connected yet`, the WiFi module may need more current
+than USB gives: unplug USB, power the Tank on, and watch the vision page
+(`otvvision`, team H2Woah!) instead. The same lines go to its console.
+
 If a run says `Automatic run failed`, the code is already on the clipboard:
 follow the 4 steps it prints (speed must be **instant**).
 

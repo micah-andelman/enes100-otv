@@ -16,8 +16,8 @@ bool gVisionStarted = false;
 bool gRunDone = false;  // global, not a static local (the simulator resets those)
 
 void setup() {
-#if !SIM
-  // The simulator has no Serial.
+#if HAS_SERIAL
+  // The browser simulator has no Serial (the robot and physical Tank do).
   Serial.begin(SERIAL_BAUD);
   // Prints when this code was compiled, so you can tell
   // which version is on the board.
@@ -25,11 +25,17 @@ void setup() {
   Serial.print(__DATE__);
   Serial.print(" ");
   Serial.println(__TIME__);
+#if TANK_HW
+  Serial.println("Target: PHYSICAL TANK");
+#else
   Serial.println("Target: ROBOT");
+#endif
   Serial.print("TEST_MODE: ");
   Serial.println(TEST_MODE);
   Serial.print("MS5_TASK: ");
   Serial.println(MS5_TASK);
+  Serial.print("Marker: ");
+  Serial.println(MARKER_ID);
 #endif
 
   driveSetup();
@@ -41,10 +47,16 @@ void setup() {
 #if (TEST_MODE == TEST_VISION) || ((TEST_MODE == TEST_NONE) && (SIM || (MS5_TASK == MS5_NONE)))
   Enes100.begin(TEAM_NAME, TEAM_TYPE, MARKER_ID, ROOM_NUMBER, VISION_WIFI_TX, VISION_WIFI_RX);
   gVisionStarted = true;
+  logMsg("Connecting to the vision system...");
   if (!waitForConnection(WIFI_CONNECT_MS)) logMsg("Vision system not connected, continuing");
+  else logMsg("Vision system connected");
 #endif
 #if SIM
+#if TANK_HW
+  logMsg("Target: PHYSICAL TANK");
+#else
   logMsg("Target: SIMULATOR");
+#endif
   if (!simSpeedOk()) {
     // Stop here: nothing steers correctly at this speed.
     // (No commas: the simulator console drops the space after them.)

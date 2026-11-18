@@ -15,6 +15,8 @@
 #   otvpull                 pull teammate sketches from Google Drive
 #   otv2 .. otv10           MS5 demos (otv7a / otv7b for sub-task 7), see otvhelp
 #   otv2sim otv3sim otv8sim otv10sim   sim dry runs of the robot demos
+#   otv4tank otv5tank       MS5 4/5 on the physical Tank + real vision system, numbers in this terminal
+#   otvwatch                live pose + Arduino prints from the vision system, in this terminal
 #
 # Install once:  powershell -ExecutionPolicy Bypass -File tools/install_otv_commands.ps1
 
@@ -94,6 +96,10 @@ MS5 demos (numbers = MS5 sub-tasks):
   otv3 [-TurnMs 950]      robot: three timed 90 deg turns
   otv4                    sim: wireless receive (prints x, y, theta)
   otv5                    sim: wireless transmit (mission messages)
+  otv4tank [-Marker 54]   TANK + vision system: prints received x, y, theta here
+  otv5tank [-Marker 54]   TANK + vision system: sends depth + water type, prints what it sent
+                          (upload on USB with Tank power OFF, unplug, power on; output prints here)
+  otvwatch [-Team name]   live pose + Arduino prints for a team from the vision system, in this window
   otv6                    sim: start -> mission site -> before the limbo
   otv7a                   sim: obstacle avoidance, wall hug (full route)
   otv7b                   sim: obstacle avoidance, encounter + detour
@@ -385,6 +391,59 @@ Live line every second: arm angle, arm ultrasonic, depth, front ultrasonic.
 "@ -Monitor
 }
 
+# MS5 4 + 5 on the physical Tank with the real vision system (room 1120).
+# Upload with the Tank power OFF, unplug USB, power the Tank on (it doesn't
+# drive in these). Its WiFi module only works on Tank power. The Tank prints
+# to the vision system, and otvwatch shows that in this PowerShell window.
+function Invoke-OtvTankTask([string]$Title, [int]$Task, [string]$Next, [int]$Marker = 54) {
+    $b = Find-OtvBoard 'tank'
+    if (-not $b) { Write-Otv 'No board found. Plug in the Tank (Mega) over USB, Tank power OFF.' Red; return }
+    if ($b.Target -eq 'robot') { Write-Otv "That's the OTV R4 ($($b.Port)), not the Tank's Mega." Red; return }
+    Write-Otv '!! Tank power switch must be OFF while USB is plugged in.' Yellow
+    Write-Otv "MS5 $Title (physical Tank, marker $Marker, $($b.Port))"
+    $cfg = $script:OtvTargets['tank']
+    arduino-cli compile --upload -p $b.Port --fqbn $cfg.Fqbn --build-property "compiler.cpp.extra_flags=-DSIM=1 -DMS5_TASK=$Task -DMARKER_OVERRIDE=$Marker" (Join-Path $script:OtvRoot 'otv') | Out-Host
+    if ($LASTEXITCODE -ne 0) { Write-Otv 'UPLOAD FAILED (close any Serial monitor and retry)' Red; return }
+    Write-Otv 'Upload OK' Green
+    Write-Host @"
+
+Now:
+  1. Unplug the USB cable from the Tank.
+  2. Tank in the arena, marker $Marker facing up.
+  3. Power the Tank ON. It connects to the vision system in up to 30 s.
+$Next
+"@
+    Read-Host 'Press Enter once the Tank is unplugged and powered on' | Out-Null
+    otvwatch
+}
+
+# Live team data from the vision system, printed in this window: pose
+# (marker, x, y, theta) and every line the Arduino prints. Ctrl+C to quit.
+function otvwatch {
+    param([string]$Team = 'H2Woah!')
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Write-Otv 'Node.js not found. Use otvvision (the web page) instead.' Red; return }
+    & node --experimental-websocket --no-warnings (Join-Path $script:OtvRoot 'tools/vision_watch.js') --team $Team
+}
+
+function otv4tank {
+    param([int]$Marker = 54)
+    Invoke-OtvTankTask '4 wireless receive' 4 -Marker $Marker -Next @"
+Here you'll see two kinds of lines, twice a second:
+  ARDUINO Received x=... y=... theta=...   what the Tank's Arduino received
+  VISION  marker $Marker x = ... y = ... theta = ...   what the vision system sent
+Move or turn the Tank by hand and both follow. Ctrl+C to quit.
+"@
+}
+
+function otv5tank {
+    param([int]$Marker = 54)
+    Invoke-OtvTankTask '5 wireless transmit' 5 -Marker $Marker -Next @"
+It sends DEPTH 30 mm and WATER_TYPE unpolluted once connected, then
+again every 15 s. Here you'll see 'ARDUINO Sent #n: ...' lines; the
+vision computer shows the mission messages (team H2Woah!). Ctrl+C to quit.
+"@
+}
+
 function otv10 {
     Invoke-OtvRobotTask '10 mission actuation (arm + pump)' '-DMS5_TASK=10' @"
 Kill switch ON (servos and pump need battery power). Press Enter in the
@@ -418,6 +477,9 @@ $script:OtvMenu = @(
     @{ Key = '6';  Title = 'Navigation, no obstacles'; When = 'start -> mission site -> before the limbo';  Run = { otv6 } }
     @{ Key = '7a'; Title = 'Obstacles: wall hug';   When = 'our real route, start to goal';                 Run = { otv7a } }
     @{ Key = '7b'; Title = 'Obstacles: detour';     When = 'sees an obstacle, backs up, changes lane';      Run = { otv7b } }
+    @{ Section = 'MS5 ON THE PHYSICAL TANK   (real vision system, room 1120; upload, unplug, power on)' }
+    @{ Key = '4t'; Title = 'Wireless receive (Tank)'; When = 'real vision system; x, y, theta print here';  Run = { otv4tank -Marker (Read-OtvNumber 'Marker number on the Tank' 54) } }
+    @{ Key = '5t'; Title = 'Wireless transmit (Tank)'; When = 'real vision system; resends every 15 s';          Run = { otv5tank -Marker (Read-OtvNumber 'Marker number on the Tank' 54) } }
     @{ Section = 'ROBOT DEMOS, DRY RUN IN THE SIMULATOR   (same code; checks the logic)' }
     @{ Key = '2s'; Title = 'Forward (sim)';          When = 'faces +x, open-loop drive, prints distance';   Run = { otv2sim } }
     @{ Key = '3s'; Title = '3 x 90 deg turns (sim)'; When = 'prints degrees turned each time';              Run = { otv3sim } }
@@ -435,6 +497,7 @@ $script:OtvMenu = @(
     @{ Section = 'TOOLS' }
     @{ Key = 'm';  Title = 'Serial monitor';        When = 'robot on USB';                                  Run = { otvmonitor } }
     @{ Key = 'c';  Title = 'Find the board';        When = 'which board + COM port is plugged in';          Run = { otvconnect } }
+    @{ Key = 'w';  Title = 'Watch vision system';   When = 'our pose + Arduino prints, in this window';     Run = { otvwatch } }
     @{ Key = 'v';  Title = 'Vision system page';    When = 'room 1120';                                     Run = { otvvision } }
     @{ Key = 's';  Title = 'Full mission in the sim'; When = 'runs by itself in its own Chrome window';     Run = {
         otvsim
