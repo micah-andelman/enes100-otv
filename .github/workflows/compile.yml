@@ -22,6 +22,8 @@ jobs:
             flags: compiler.cpp.extra_flags=-DSIM=1 -DMS5_TASK=2
           - name: robot MS5 actuation
             flags: compiler.cpp.extra_flags=-DSIM=0 -DMS5_TASK=10
+          - name: robot MS6 obstacles
+            flags: compiler.cpp.extra_flags=-DSIM=0 -DMS6_TASK=3
     name: compile (${{ matrix.target.name }})
     steps:
       - uses: actions/checkout@v4

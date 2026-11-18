@@ -8,13 +8,14 @@
 # with SIM=1. The output has no conditionals and no #defines left.
 #
 # MS5 demos: -Task N builds MS5_TASK=N into -Out (otv.ps1 otv4..otv7b use this).
+# MS6 demos: -Ms6Task N builds MS6_TASK=N into -Out (otvsitesim, otvmissionsim, otvobstsim).
 
-param([int]$Task = 0, [string]$Out = '')
+param([int]$Task = 0, [int]$Ms6Task = 0, [string]$Out = '')
 
 $ErrorActionPreference = 'Stop'
 
 # Without -Out a demo build would overwrite the full-mission otv_sim.ino.
-if ($Task -ne 0 -and -not $Out) { throw '-Task needs -Out (use otv4..otv7b, which pass it)' }
+if (($Task -ne 0 -or $Ms6Task -ne 0) -and -not $Out) { throw '-Task / -Ms6Task need -Out (use the otv commands, which pass it)' }
 
 $root   = Split-Path -Parent $PSScriptRoot
 $srcDir = Join-Path $root 'otv'
@@ -27,7 +28,7 @@ if ($Out) {
 }
 
 # Concatenation order matters: config and prototypes first.
-$files = @('config.h', 'otv.h', 'otv.ino', 'drive.ino', 'mission.ino', 'nav.ino', 'tests.ino', 'ms5.ino')
+$files = @('config.h', 'otv.h', 'otv.ino', 'drive.ino', 'mission.ino', 'nav.ino', 'tests.ino', 'ms5.ino', 'ms6.ino')
 
 # Lines removed before preprocessing (the header below adds the library
 # includes once, in the order the simulator needs).
@@ -56,7 +57,7 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 # -E preprocess only, -P no line markers, -undef no compiler-predefined
 # macros. No -C: comments are stripped, so the code shown in the simulator
 # has none (the commented source is otv/).
-$pre = & $gpp.FullName -E -P -undef -x c++ -DSIM=1 -DTEST_MODE=0 "-DMS5_TASK=$Task" $tmp
+$pre = & $gpp.FullName -E -P -undef -x c++ -DSIM=1 -DTEST_MODE=0 "-DMS5_TASK=$Task" "-DMS6_TASK=$Ms6Task" $tmp
 if ($LASTEXITCODE -ne 0) { throw "Preprocessing failed (exit $LASTEXITCODE)" }
 Remove-Item $tmp
 

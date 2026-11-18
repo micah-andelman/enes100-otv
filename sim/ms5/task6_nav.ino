@@ -3,6 +3,28 @@
 #include "Enes100.h"
 #include "Tank.h"
 
+const int DRIVE_PWM = 140;
+const int MIN_TURN_PWM = 70;
+const float TURN_GAIN = 120.0;
+const float HEADING_GAIN = 150.0;
+const float TURN_TOL_RAD = 0.08;
+const float POS_TOL_M = 0.05;
+const float DRIVE_SPEED_MPS = 0.075;
+const unsigned long BACKUP_MS = 800;
+const int FRONT_OBSTACLE_MM = 150;
+const float MISSION_STOP_DIST = 0.30;
+const float HUG_STAGE_X = 0.8;
+const float HUG_END_X = 2.55;
+const float LIMBO_ALIGN_X = 3.0;
+const unsigned long HUG_TIMEOUT_MS = 40000;
+const float SAMPLE_ML = 30.0;
+const float PUMP_ML_PER_S = 2.5;
+const int ARM_STOW_DEG = 20;
+const int ARM_DOWN_DEG = 96;
+const unsigned long SERVO_STEP_MS = 15;
+const unsigned long ARM_SETTLE_MS = 500;
+const float SENSOR_HEIGHT_MM = 0;
+const int COLOR_POLLUTED_THRESH = 400;
 
 const char* const TEAM_NAME = "H2Woah!";
 const byte TEAM_TYPE = WATER;
@@ -14,16 +36,10 @@ const long SERIAL_BAUD = 115200;
 const int MAX_PWM = 153;
 const bool LEFT_INVERT = false;
 const bool RIGHT_INVERT = false;
-const int DRIVE_PWM = 140;
 const int FOLLOW_PWM = 70;
-const int MIN_TURN_PWM = 70;
-const float TURN_GAIN = 120.0;
-const float HEADING_GAIN = 150.0;
-const float TURN_TOL_RAD = 0.08;
 const float REALIGN_RAD = 0.50;
 const float MAX_MERGE_RAD = 0.60;
 const float FOLLOW_REALIGN_RAD = 1.20;
-const float POS_TOL_M = 0.05;
 const float APPROACH_SLOW_M = 0.30;
 const int APPROACH_MIN_PWM = 50;
 const unsigned long LOOP_MS = 20;
@@ -31,8 +47,6 @@ const unsigned long VISION_LOST_MS = 6000;
 const unsigned long WIFI_CONNECT_MS = 30000;
 const unsigned long VISION_START_MS = 10000;
 const unsigned long MOVE_TIMEOUT_MS = 15000;
-const float DRIVE_SPEED_MPS = 0.075;
-const unsigned long BACKUP_MS = 800;
 const float OTV_HALF_WIDTH_M = 0.10;
 const float OTV_HALF_LENGTH_M = 0.09;
 const float OTV_TURN_RADIUS_M = 0.135;
@@ -44,16 +58,11 @@ const float MISSION_TOP_Y = 1.5;
 const float MISSION_BOT_X = 0.5;
 const float MISSION_BOT_Y = 0.5;
 const float ARENA_MID_Y = 1.0;
-const float MISSION_STOP_DIST = 0.30;
 const float WALL_HUG_Y = 1.875;
 const float WALL_HUG_GAIN = 5.0;
-const float HUG_STAGE_X = 0.8;
 const float HUG_STAGE_Y = ARENA_H - OTV_TURN_RADIUS_M - WALL_TURN_MARGIN_M;
-const float HUG_END_X = 2.55;
-const float LIMBO_ALIGN_X = 3.0;
 const float LIMBO_LANE_Y = 1.5;
 const float GOAL_X = 3.7;
-const unsigned long HUG_TIMEOUT_MS = 40000;
 const unsigned long LIMBO_BLIND_MAX_MS = 6500;
 const int SIM_OBSTACLE_SENSOR_ID = 1;
 const float SIM_OBSTACLE_THRESH_M = 0.40;
@@ -66,19 +75,11 @@ const float OBST_Y_MAX = 1.75;
 const float OBST_HIT_MARGIN_M = 0.05;
 const unsigned long OBSTACLE_BACKUP_MS = 500;
 const int MAX_OBSTACLE_HITS = 3;
-const float SAMPLE_ML = 30.0;
-const float PUMP_ML_PER_S = 2.5;
-const int ARM_STOW_DEG = 20;
-const int ARM_DOWN_DEG = 160;
 const bool SERVO2_MIRRORED = true;
-const unsigned long SERVO_STEP_MS = 15;
-const unsigned long ARM_SETTLE_MS = 500;
 const int US_SAMPLES = 25;
 const unsigned long US_TIMEOUT_US = 30000;
 const unsigned long US_PING_GAP_MS = 60;
 const float US_MM_PER_US = 0.343;
-const float SENSOR_HEIGHT_MM = 0;
-const int COLOR_POLLUTED_THRESH = 400;
 const unsigned long COLOR_SETTLE_MS = 200;
 const int COLOR_SAMPLES = 5;
 const unsigned long COLOR_TIMEOUT_US = 100000;
@@ -100,10 +101,14 @@ const unsigned long TEST_GAP_MS = 500;
 const unsigned long TEST_ARM_HOLD_MS = 2000;
 const unsigned long TEST_PRINT_MS = 500;
 const unsigned long TEST_VISION_MS = 250;
+const unsigned long CAL_PRINT_MS = 1000;
+const int CAL_PUMP_MAX_S = 30;
+const int CAL_LIVE_SAMPLES = 5;
 const unsigned long MS5_START_DELAY_MS = 1000;
 const unsigned long MS5_TURN_PAUSE_MS = 2000;
 const unsigned long MS5_PRINT_MS = 500;
 const int MS5_RECEIVE_PRINTS = 20;
+const unsigned long MS5_TANK_RESEND_MS = 15000;
 const unsigned long MS5_ARM_HOLD_MS = 1000;
 const float MS5_LANE_LOW_Y = 0.5;
 const float MS5_LANE_MID_Y = 1.0;
@@ -153,8 +158,17 @@ unsigned long legTimeoutMs(float distM);
 void logPose(const char *label);
 void runFullRun();
 void runRoute(bool toGoal);
+extern float gSiteX;
+extern float gSiteY;
+bool routeStart();
+void legMissionSite();
+void legBackup();
+void legObstacles();
+void legLimboAlign();
+void legGoal();
 void runTests();
 void runMs5();
+void runMs6();
 bool gVisionStarted = false;
 bool gRunDone = false;
 void setup() {
@@ -163,7 +177,9 @@ void setup() {
   navSetup();
   Enes100.begin(TEAM_NAME, TEAM_TYPE, MARKER_ID, ROOM_NUMBER, VISION_WIFI_TX, VISION_WIFI_RX);
   gVisionStarted = true;
+  logMsg("Connecting to the vision system...");
   if (!waitForConnection(WIFI_CONNECT_MS)) logMsg("Vision system not connected, continuing");
+  else logMsg("Vision system connected");
   logMsg("Target: SIMULATOR");
   if (!simSpeedOk()) {
     logMsg("STOPPED: simulator speed is too slow.");
@@ -464,28 +480,51 @@ static void finishBlindIfVisionLost() {
 }
 void runFullRun() { runRoute(true); }
 void runRoute(bool toGoal) {
+  if (!routeStart()) return;
+  legMissionSite();
+  runMission();
+  legBackup();
+  legObstacles();
+  legLimboAlign();
+  if (!toGoal) {
+    stopDrive();
+    logMsg("Stopped before the limbo");
+    return;
+  }
+  legGoal();
+  logMsg("Run complete");
+}
+float gSiteX = MISSION_TOP_X;
+float gSiteY = MISSION_TOP_Y;
+bool routeStart() {
   logMsg("Run start");
   if (!waitForVision(VISION_START_MS)) {
     stopDrive();
     logMsg("No vision at start, aborting run");
-    return;
+    return false;
   }
+  return true;
+}
+void legMissionSite() {
   bool startTop = Enes100.getY() > ARENA_MID_Y;
-  float siteX = startTop ? MISSION_BOT_X : MISSION_TOP_X;
-  float siteY = startTop ? MISSION_BOT_Y : MISSION_TOP_Y;
+  gSiteX = startTop ? MISSION_BOT_X : MISSION_TOP_X;
+  gSiteY = startTop ? MISSION_BOT_Y : MISSION_TOP_Y;
   logMsg(startTop ? "Started in top square, mission site is bottom"
                   : "Started in bottom square, mission site is top");
   logPose("Pose at start");
-  if (!driveTo(siteX, siteY, MISSION_STOP_DIST)) {
+  if (!driveTo(gSiteX, gSiteY, MISSION_STOP_DIST)) {
     logMsg("Mission site approach failed, running mission anyway");
   }
   stopDrive();
   logPose("Pose at mission site");
-  runMission();
+}
+void legBackup() {
   setDrive(-DRIVE_PWM, -DRIVE_PWM);
   delay(BACKUP_MS);
   stopDrive();
   logPose("Pose after backup");
+}
+void legObstacles() {
   logMsg("Wall hug start");
   if (!driveTo(HUG_STAGE_X, ARENA_MID_Y, POS_TOL_M)) logMsg("Hug approach failed, continuing");
   if (!driveTo(HUG_STAGE_X, HUG_STAGE_Y, POS_TOL_M)) logMsg("Hug staging approach failed, continuing");
@@ -494,20 +533,18 @@ void runRoute(bool toGoal) {
   logPose("Pose after turn to +x");
   if (!hugWall(HUG_END_X)) logMsg("Wall hug failed, continuing");
   logPose("Pose after wall hug");
+}
+void legLimboAlign() {
   logMsg("Limbo");
   followLine(LIMBO_LANE_Y, LIMBO_ALIGN_X, FOLLOW_PWM, false, legTimeoutMs(LIMBO_ALIGN_X - HUG_END_X + WALL_HUG_Y - LIMBO_LANE_Y));
   logPose("Pose at limbo align");
-  if (!toGoal) {
-    stopDrive();
-    logMsg("Stopped before the limbo");
-    return;
-  }
+}
+void legGoal() {
   if (followLine(LIMBO_LANE_Y, GOAL_X, FOLLOW_PWM, false, legTimeoutMs(GOAL_X - LIMBO_ALIGN_X)) != FOLLOW_DONE) {
     finishBlindIfVisionLost();
   }
   stopDrive();
   logPose("Pose at end");
-  logMsg("Run complete");
 }
 bool gMs5Done = false;
 static void ms5StartCountdown() {
@@ -701,3 +738,4 @@ void runMs5() {
   stopDrive();
   logMsg("MS5 demo DONE - robot stopped");
 }
+bool gMs6Done = false;

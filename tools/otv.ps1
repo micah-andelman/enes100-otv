@@ -17,6 +17,7 @@
 #   otv2sim otv3sim otv8sim otv10sim   sim dry runs of the robot demos
 #   otv4tank otv5tank       MS5 4/5 on the physical Tank + real vision system, numbers in this terminal
 #   otvwatch                live pose + Arduino prints from the vision system, in this terminal
+#   otvsite otvmission otvobst   MS6 demos on the robot (+ ...sim dry runs), see otvhelp
 #
 # Install once:  powershell -ExecutionPolicy Bypass -File tools/install_otv_commands.ps1
 
@@ -90,6 +91,12 @@ function otvhelp {
                           never touches a solid obstacle, and passes the limbo opening.
                           -Only otv7a,otv7b runs just those (~1 min per moving run)
   otvpull                 pull teammate sketches from Google Drive
+
+MS6 demos (any 4 of 6 objectives, one at a time, on the robot; vision system on):
+  otvsite                 Nav 1 + Mission I-III: start square -> pool -> measure, pump, send, stop
+  otvmission              Mission I-III only: OTV placed at the pool by hand
+  otvobst                 Nav 2 + Nav 3: landing zone -> wall hug past the obstacles -> limbo -> goal
+  otvsitesim otvmissionsim otvobstsim   the same three as simulator dry runs
 
 MS5 demos (numbers = MS5 sub-tasks):
   otv2 [-Seconds 45]      robot: drive straight ~3.4 m, open loop (time = distance / DRIVE_SPEED_MPS)
@@ -220,6 +227,9 @@ $script:OtvSimCases = @(
     @{ Name = 'otv8sim';  Task = 8;  File = 'sim\ms5\task8_sensor_sim.ino';   Buttons = 'Randomize,Remove Obstacles' }
     @{ Name = 'otv10sim'; Task = 10; File = 'sim\ms5\task10_actuate_sim.ino'; Buttons = 'Randomize' }
     @{ Name = 'full';     Task = 0;  File = 'sim\otv_sim\otv_sim.ino';        Buttons = 'Randomize' }
+    @{ Name = 'site';     Ms6 = 1;   File = 'sim\ms6\site_sim.ino';           Buttons = 'Randomize' }
+    @{ Name = 'mission';  Ms6 = 2;   File = 'sim\ms6\mission_sim.ino';        Buttons = 'Randomize' }
+    @{ Name = 'obst';     Ms6 = 3;   File = 'sim\ms6\obstacles_sim.ino';      Buttons = 'Randomize' }
 )
 
 function otvsimcheck {
@@ -232,6 +242,7 @@ function otvsimcheck {
     if ($Only) { $cases = @($cases | Where-Object { $Only -contains $_.Name }) }
     foreach ($c in $cases) {
         if ($c.Task) { powershell -ExecutionPolicy Bypass -File $mk -Task $c.Task -Out (Join-Path $script:OtvRoot $c.File) | Out-Null }
+        if ($c.Ms6) { powershell -ExecutionPolicy Bypass -File $mk -Ms6Task $c.Ms6 -Out (Join-Path $script:OtvRoot $c.File) | Out-Null }
     }
     $js = Join-Path $script:OtvRoot 'tools\sim_autorun.js'
     $tmp = Join-Path $env:TEMP 'otv_simcheck.txt'
@@ -313,12 +324,12 @@ function Invoke-OtvSimTask([int]$Task, [string]$Name, [string]$Title, [string]$B
 }
 
 # Compiles + uploads a robot demo. $Flags are extra -D flags.
-function Invoke-OtvRobotTask([string]$Title, [string]$Flags, [string]$Next, [switch]$Monitor) {
+function Invoke-OtvRobotTask([string]$Title, [string]$Flags, [string]$Next, [switch]$Monitor, [string]$Label = 'MS5') {
     $b = Find-OtvBoard 'robot'
     if (-not $b) { Write-Otv 'No board found. Plug in the OTV (R4) over USB.' Red; return }
     if ($b.Target -and $b.Target -ne 'robot') { Write-Otv "That's the Tank ($($b.Port)), not the OTV R4." Red; return }
     $cfg = $script:OtvTargets['robot']
-    Write-Otv "MS5 $Title (robot, $($b.Port))"
+    Write-Otv "$Label $Title (robot, $($b.Port))"
     arduino-cli compile --upload -p $b.Port --fqbn $cfg.Fqbn --build-property "compiler.cpp.extra_flags=-DSIM=0 $Flags" (Join-Path $script:OtvRoot 'otv') | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-Otv 'UPLOAD FAILED (close any Serial monitor and retry)' Red; return }
     Write-Otv 'Upload OK' Green
@@ -451,6 +462,55 @@ monitor to run: arm down, pump 2 s, arm stow. Repeatable. Ctrl+C to quit.
 "@ -Monitor
 }
 
+# ---------------- MS6 demos (Milestone 6: Systems Integration) ----------------
+# Any 4 of 6 objectives, shown one at a time on the real OTV with unlimited
+# attempts. Each demo runs part of the full mission (MS6_TASK, otv/ms6.ino)
+# so a failed attempt is quick to retry. The vision system must be running.
+
+function otvsite {
+    Invoke-OtvRobotTask 'Nav 1 + mission (start -> mission site -> mission)' '-DMS6_TASK=1' -Label 'MS6' @"
+Shows Nav 1 (within 150 mm of the mission site) + Mission I-III in one attempt.
+  1. Unplug USB. Put the OTV in its start square (any heading allowed by the rules).
+  2. Kill switch ON. It connects to the vision system (up to 30 s), drives to
+     the pool, measures, pumps, sends the results, and stops at the pool.
+  Retry: kill switch OFF, put it back, kill switch ON.
+  Results + prints: otvwatch (or the vision page).
+"@
+}
+
+function otvmission {
+    Invoke-OtvRobotTask 'mission only (OTV placed at the pool)' '-DMS6_TASK=2' -Label 'MS6' @"
+Shows Mission I-III without driving.
+  1. Unplug USB. Place the OTV at the pool by hand, arm side over the water.
+  2. Kill switch ON, hands clear of the arm. Once connected (up to 30 s) it
+     lowers the arm, measures, pumps, stows, and sends the results.
+  Results + prints: otvwatch (or the vision page).
+"@
+}
+
+function otvobst {
+    Invoke-OtvRobotTask 'Nav 2 + Nav 3 (landing zone -> past the obstacles -> goal)' '-DMS6_TASK=3' -Label 'MS6' @"
+Shows Nav 2 (completely past the 3 obstacles) + Nav 3 (completely in the goal zone).
+  1. Unplug USB. Put the OTV anywhere in the landing zone (x < 0.8 m), any heading.
+  2. Kill switch ON. It drives to the staging point, hugs the top wall past
+     the obstacles, goes under the limbo, and stops in the goal zone.
+  Retry: kill switch OFF, put it back, kill switch ON.
+"@
+}
+
+# Sim dry runs of the MS6 demos: same code, browser simulator (mission is a stub).
+function Invoke-OtvMs6Sim([int]$Ms6Task, [string]$Name, [string]$Title, [string]$Note) {
+    $out = Join-Path $script:OtvRoot "sim\ms6\$Name.ino"
+    Write-Otv "MS6 $Title (simulator dry run)"
+    Write-Host $Note
+    powershell -ExecutionPolicy Bypass -File (Join-Path $script:OtvRoot 'tools\make_sim.ps1') -Ms6Task $Ms6Task -Out $out
+    if ($LASTEXITCODE -ne 0) { Write-Otv 'SIM BUILD FAILED' Red; return }
+    Start-OtvSimAuto $out 'Randomize'
+}
+function otvsitesim    { Invoke-OtvMs6Sim 1 'site_sim'      'Nav 1 + mission' 'Random start: drives to the mission site, runs the (stub) mission, stops.' }
+function otvmissionsim { Invoke-OtvMs6Sim 2 'mission_sim'   'mission only'    'Runs the (stub) mission where it starts and sends the results.' }
+function otvobstsim    { Invoke-OtvMs6Sim 3 'obstacles_sim' 'Nav 2 + Nav 3'   'Random start + obstacles: wall hug past the obstacles, under the limbo, into the goal.' }
+
 # ---------------- otv: interactive menu ----------------
 # Type 'otv' (or double-click the "OTV" desktop shortcut) for a menu.
 # Keys match the commands: 2 = otv2, 7a = otv7a, r = full mission, etc.
@@ -465,6 +525,14 @@ function Read-OtvNumber([string]$Prompt, [int]$Default) {
 }
 
 $script:OtvMenu = @(
+    @{ Section = 'MS6 ON THE ROBOT   (plug the OTV in over USB, then unplug + kill switch ON to run)' }
+    @{ Key = 'n';  Title = 'Nav 1 + mission';       When = 'start square -> pool -> measure, pump, send';   Run = { otvsite } }
+    @{ Key = 'i';  Title = 'Mission only';          When = 'OTV placed at the pool by hand';                Run = { otvmission } }
+    @{ Key = 'o';  Title = 'Nav 2 + Nav 3';         When = 'landing zone -> past the obstacles -> goal';    Run = { otvobst } }
+    @{ Section = 'MS6 DRY RUN IN THE SIMULATOR   (same code; runs by itself in its own Chrome window)' }
+    @{ Key = 'ns'; Title = 'Nav 1 + mission (sim)'; When = 'random start, stub mission';                    Run = { otvsitesim } }
+    @{ Key = 'is'; Title = 'Mission only (sim)';    When = 'stub mission, sends results';                   Run = { otvmissionsim } }
+    @{ Key = 'os'; Title = 'Nav 2 + Nav 3 (sim)';   When = 'random obstacles, wall hug to the goal';        Run = { otvobstsim } }
     @{ Section = 'MS5 ON THE ROBOT   (plug the OTV in over USB first)' }
     @{ Key = '2';  Title = 'Forward 3.4 m';         When = 'uploads, then unplug + kill switch; catch it';  Run = { otv2 -Seconds (Read-OtvNumber 'Seconds to drive' 45) } }
     @{ Key = '3';  Title = '3 x 90 deg turns';      When = 'uploads, then unplug + kill switch';            Run = { otv3 -TurnMs (Read-OtvNumber 'ms per 90 deg turn' 950) } }

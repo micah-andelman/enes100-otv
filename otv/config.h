@@ -98,6 +98,27 @@ const int   COLOR_POLLUTED_THRESH = 400; // color sensor cutoff. Clean water rea
 #endif
 #endif
 
+// MS6_TASK: 0 = normal build. Milestone 6 (Systems Integration) demos
+// (tools/otv.ps1: otvsite, otvmission, otvobst). Each one runs part of the
+// full mission so a failed attempt is quick to retry. Built for the robot;
+// with SIM=1 they are browser-simulator dry runs (otvsitesim, ...).
+#define MS6_NONE      0
+#define MS6_SITE      1   // start square -> mission site -> mission, stop (Nav 1 + Mission I-III)
+#define MS6_MISSION   2   // OTV placed at the pool by hand: mission only (Mission I-III)
+#define MS6_OBSTACLES 3   // OTV placed in the landing zone: wall hug -> limbo -> goal (Nav 2 + Nav 3)
+#ifndef MS6_TASK
+#define MS6_TASK MS6_NONE
+#endif
+
+#if MS6_TASK != MS6_NONE
+#if (MS6_TASK < MS6_SITE) || (MS6_TASK > MS6_OBSTACLES)
+#error "MS6_TASK must be 1..3."
+#endif
+#if (TEST_MODE != TEST_NONE) || (MS5_TASK != MS5_NONE)
+#error "Set only one of MS6_TASK, MS5_TASK, TEST_MODE."
+#endif
+#endif
+
 // Physical ENES100 Tank = SIM=1 built for its Mega. Unlike the browser
 // simulator it has USB Serial, so it also prints to the terminal.
 #if SIM && defined(ARDUINO_AVR_MEGA2560)

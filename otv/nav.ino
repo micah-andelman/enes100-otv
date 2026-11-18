@@ -359,39 +359,71 @@ static void finishBlindIfVisionLost() {
 
 // ---------------- Full run ----------------
 // Each leg continues even if the previous one failed, to salvage
-// partial points.
+// partial points. The legs are separate functions so the MS6 demos
+// (ms6.ino) can run part of the route.
 void runFullRun() { runRoute(true); }
 
 // toGoal = false stops at the limbo align point, just before the limbo
 // (MS5 sub-task 6: start -> mission site -> right before the limbo).
 void runRoute(bool toGoal) {
+  if (!routeStart()) return;
+  legMissionSite();
+  runMission();
+  legBackup();
+  legObstacles();
+  legLimboAlign();
+  if (!toGoal) {
+    stopDrive();
+    logMsg("Stopped before the limbo");
+    return;
+  }
+  legGoal();
+  logMsg("Run complete");
+}
+
+// Mission site center, set by legMissionSite() (globals: the simulator
+// resets static locals).
+float gSiteX = MISSION_TOP_X;
+float gSiteY = MISSION_TOP_Y;
+
+// Waits for the marker. false = no vision, abort the run.
+bool routeStart() {
   logMsg("Run start");
   if (!waitForVision(VISION_START_MS)) {
     stopDrive();
     logMsg("No vision at start, aborting run");
-    return;
+    return false;
   }
+  return true;
+}
 
+// Start square -> stop MISSION_STOP_DIST from the mission site center.
+void legMissionSite() {
   // The mission site is the square we did NOT start in.
   bool startTop = Enes100.getY() > ARENA_MID_Y;
-  float siteX = startTop ? MISSION_BOT_X : MISSION_TOP_X;
-  float siteY = startTop ? MISSION_BOT_Y : MISSION_TOP_Y;
+  gSiteX = startTop ? MISSION_BOT_X : MISSION_TOP_X;
+  gSiteY = startTop ? MISSION_BOT_Y : MISSION_TOP_Y;
   logMsg(startTop ? "Started in top square, mission site is bottom"
                   : "Started in bottom square, mission site is top");
   logPose("Pose at start");
 
-  if (!driveTo(siteX, siteY, MISSION_STOP_DIST)) {
+  if (!driveTo(gSiteX, gSiteY, MISSION_STOP_DIST)) {
     logMsg("Mission site approach failed, running mission anyway");
   }
   stopDrive();
   logPose("Pose at mission site");
-  runMission();
+}
 
+// Reverse away from the pool after the mission.
+void legBackup() {
   setDrive(-DRIVE_PWM, -DRIVE_PWM);
   delay(BACKUP_MS);
   stopDrive();
   logPose("Pose after backup");
+}
 
+// Anywhere in the landing zone -> past both obstacle columns on the hug line.
+void legObstacles() {
   // Avoid all obstacles: go to x = HUG_STAGE_X at mid height, drive up that
   // line to the staging point (clear of the top pool), turn to +x there,
   // then hugWall merges onto the hug line and follows it past both columns.
@@ -403,21 +435,21 @@ void runRoute(bool toGoal) {
   logPose("Pose after turn to +x");
   if (!hugWall(HUG_END_X)) logMsg("Wall hug failed, continuing");
   logPose("Pose after wall hug");
+}
 
-  // Curve down onto the limbo lane (top half: under the limbo, never over
-  // the log), then straight through the limbo to the goal.
+// Curve down onto the limbo lane (top half: under the limbo, never over
+// the log), stopping just before the limbo.
+void legLimboAlign() {
   logMsg("Limbo");
   followLine(LIMBO_LANE_Y, LIMBO_ALIGN_X, FOLLOW_PWM, false, legTimeoutMs(LIMBO_ALIGN_X - HUG_END_X + WALL_HUG_Y - LIMBO_LANE_Y));
   logPose("Pose at limbo align");
-  if (!toGoal) {
-    stopDrive();
-    logMsg("Stopped before the limbo");
-    return;
-  }
+}
+
+// Straight through the limbo to the goal.
+void legGoal() {
   if (followLine(LIMBO_LANE_Y, GOAL_X, FOLLOW_PWM, false, legTimeoutMs(GOAL_X - LIMBO_ALIGN_X)) != FOLLOW_DONE) {
     finishBlindIfVisionLost();
   }
   stopDrive();
   logPose("Pose at end");
-  logMsg("Run complete");
 }

@@ -31,7 +31,7 @@ const CHROME_PATHS = [
   path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Microsoft\\Edge\\Application\\msedge.exe'),
 ];
 // Lines that mean the demo is over.
-const DONE = /Run complete|Stopped before the limbo|aborting|MS5 (2|3|4|10): done|MS5 8: (obstacle -> stopped|timeout)|MS5 5: sent (un)?polluted|MS5 7b: past the obstacles|MS5 7b: (vision lost|timeout|every lane blocked|stopped)|STOPPED:|Program finished/;
+const DONE = /Run complete|Stopped before the limbo|aborting|MS5 (2|3|4|10): done|MS5 8: (obstacle -> stopped|timeout)|MS5 5: sent (un)?polluted|MS5 7b: past the obstacles|MS5 7b: (vision lost|timeout|every lane blocked|stopped)|MS6: done|STOPPED:|Program finished/;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const die = (msg) => { console.error('SIM AUTORUN FAILED: ' + msg); process.exit(1); };

@@ -158,8 +158,17 @@ unsigned long legTimeoutMs(float distM);
 void logPose(const char *label);
 void runFullRun();
 void runRoute(bool toGoal);
+extern float gSiteX;
+extern float gSiteY;
+bool routeStart();
+void legMissionSite();
+void legBackup();
+void legObstacles();
+void legLimboAlign();
+void legGoal();
 void runTests();
 void runMs5();
+void runMs6();
 bool gVisionStarted = false;
 bool gRunDone = false;
 void setup() {
@@ -471,28 +480,51 @@ static void finishBlindIfVisionLost() {
 }
 void runFullRun() { runRoute(true); }
 void runRoute(bool toGoal) {
+  if (!routeStart()) return;
+  legMissionSite();
+  runMission();
+  legBackup();
+  legObstacles();
+  legLimboAlign();
+  if (!toGoal) {
+    stopDrive();
+    logMsg("Stopped before the limbo");
+    return;
+  }
+  legGoal();
+  logMsg("Run complete");
+}
+float gSiteX = MISSION_TOP_X;
+float gSiteY = MISSION_TOP_Y;
+bool routeStart() {
   logMsg("Run start");
   if (!waitForVision(VISION_START_MS)) {
     stopDrive();
     logMsg("No vision at start, aborting run");
-    return;
+    return false;
   }
+  return true;
+}
+void legMissionSite() {
   bool startTop = Enes100.getY() > ARENA_MID_Y;
-  float siteX = startTop ? MISSION_BOT_X : MISSION_TOP_X;
-  float siteY = startTop ? MISSION_BOT_Y : MISSION_TOP_Y;
+  gSiteX = startTop ? MISSION_BOT_X : MISSION_TOP_X;
+  gSiteY = startTop ? MISSION_BOT_Y : MISSION_TOP_Y;
   logMsg(startTop ? "Started in top square, mission site is bottom"
                   : "Started in bottom square, mission site is top");
   logPose("Pose at start");
-  if (!driveTo(siteX, siteY, MISSION_STOP_DIST)) {
+  if (!driveTo(gSiteX, gSiteY, MISSION_STOP_DIST)) {
     logMsg("Mission site approach failed, running mission anyway");
   }
   stopDrive();
   logPose("Pose at mission site");
-  runMission();
+}
+void legBackup() {
   setDrive(-DRIVE_PWM, -DRIVE_PWM);
   delay(BACKUP_MS);
   stopDrive();
   logPose("Pose after backup");
+}
+void legObstacles() {
   logMsg("Wall hug start");
   if (!driveTo(HUG_STAGE_X, ARENA_MID_Y, POS_TOL_M)) logMsg("Hug approach failed, continuing");
   if (!driveTo(HUG_STAGE_X, HUG_STAGE_Y, POS_TOL_M)) logMsg("Hug staging approach failed, continuing");
@@ -501,20 +533,18 @@ void runRoute(bool toGoal) {
   logPose("Pose after turn to +x");
   if (!hugWall(HUG_END_X)) logMsg("Wall hug failed, continuing");
   logPose("Pose after wall hug");
+}
+void legLimboAlign() {
   logMsg("Limbo");
   followLine(LIMBO_LANE_Y, LIMBO_ALIGN_X, FOLLOW_PWM, false, legTimeoutMs(LIMBO_ALIGN_X - HUG_END_X + WALL_HUG_Y - LIMBO_LANE_Y));
   logPose("Pose at limbo align");
-  if (!toGoal) {
-    stopDrive();
-    logMsg("Stopped before the limbo");
-    return;
-  }
+}
+void legGoal() {
   if (followLine(LIMBO_LANE_Y, GOAL_X, FOLLOW_PWM, false, legTimeoutMs(GOAL_X - LIMBO_ALIGN_X)) != FOLLOW_DONE) {
     finishBlindIfVisionLost();
   }
   stopDrive();
   logPose("Pose at end");
-  logMsg("Run complete");
 }
 bool gMs5Done = false;
 static void ms5StartCountdown() {
@@ -708,3 +738,4 @@ void runMs5() {
   stopDrive();
   logMsg("MS5 demo DONE - robot stopped");
 }
+bool gMs6Done = false;

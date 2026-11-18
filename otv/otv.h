@@ -57,9 +57,21 @@ unsigned long legTimeoutMs(float distM);
 void logPose(const char *label);
 void runFullRun();
 void runRoute(bool toGoal);  // false = stop just before the limbo (MS5 sub-task 6)
+// Route legs (runRoute runs them in this order; MS6 demos run some of them)
+extern float gSiteX;  // mission site center, set by legMissionSite()
+extern float gSiteY;
+bool routeStart();     // wait for the marker; false = abort
+void legMissionSite(); // start square -> mission site
+void legBackup();      // reverse away from the pool
+void legObstacles();   // landing zone -> past both obstacle columns (wall hug)
+void legLimboAlign();  // down onto the limbo lane, just before the limbo
+void legGoal();        // under the limbo to the goal
 
 // tests.ino (robot only)
 void runTests();
 
 // ms5.ino (Milestone 5 demos, MS5_TASK != 0)
 void runMs5();
+
+// ms6.ino (Milestone 6 demos, MS6_TASK != 0)
+void runMs6();

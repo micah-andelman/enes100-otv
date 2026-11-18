@@ -34,6 +34,8 @@ void setup() {
   Serial.println(TEST_MODE);
   Serial.print("MS5_TASK: ");
   Serial.println(MS5_TASK);
+  Serial.print("MS6_TASK: ");
+  Serial.println(MS6_TASK);
   Serial.print("Marker: ");
   Serial.println(MARKER_ID);
 #endif
@@ -75,6 +77,8 @@ void setup() {
 void loop() {
 #if MS5_TASK != MS5_NONE
   runMs5();
+#elif MS6_TASK != MS6_NONE
+  runMs6();
 #elif TEST_MODE == TEST_NONE
   if (!gRunDone) {
     runFullRun();
