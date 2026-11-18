@@ -1,5 +1,36 @@
 #pragma once
 // ============================================================
+// TUNABLES — teammates: change ONLY numbers in this section.
+// After changing a number: click Upload. Change one thing at a time.
+// ============================================================
+// -- Driving --
+const int   DRIVE_PWM          = 140;    // motor power when driving (max 153). Robot too slow -> bigger. Too fast / overshoots -> smaller.
+const int   MIN_TURN_PWM       = 70;     // lowest motor power used when turning. Robot stalls/buzzes on small turns -> bigger. Jerky small turns -> smaller.
+const float TURN_GAIN          = 120.0;  // how hard it turns toward the target heading. Turns overshoot and wobble -> smaller. Turns crawl -> bigger.
+const float HEADING_GAIN       = 150.0;  // how hard it steers to stay straight while driving. Zig-zags -> smaller. Drifts off course -> bigger.
+const float TURN_TOL_RAD       = 0.08;   // how close (radians, 0.08 = ~5 deg) a turn must get before it stops. Turns hunt back and forth -> bigger. Ends pointed slightly wrong -> smaller.
+const float POS_TOL_M          = 0.05;   // how close (meters) counts as "arrived" at a waypoint. Circles around a point -> bigger. Stops short -> smaller.
+const float DRIVE_SPEED_MPS    = 0.075;  // measured robot speed (meters per second); only sets how long a move may take. Moves give up early -> smaller.
+const unsigned long BACKUP_MS  = 800;    // how long (ms) it reverses away from the pool after the mission. Hits the pool turning away -> bigger.
+const int   FRONT_OBSTACLE_MM  = 150;    // front sensor: stop if something is closer than this (mm). Stops for the side wall -> smaller. Bumps obstacles -> bigger.
+// -- Route (meters in the arena: x 0-4 left to right, y 0-2 bottom to top) --
+const float MISSION_STOP_DIST  = 0.30;   // how far (m) from the pool center it stops. Must end within 15 cm of the pool edge. Too far from pool -> smaller. Hits pool -> bigger.
+const float HUG_STAGE_X        = 0.8;    // x where it drives up toward the top wall before the obstacles. Hits the top pool -> bigger.
+const float HUG_END_X          = 2.55;   // x where it leaves the top wall after the obstacles. Clips the last obstacle -> bigger.
+const float LIMBO_ALIGN_X      = 3.0;    // x where it must be lined up with the limbo. Hits the limbo walls -> smaller (lines up sooner).
+const unsigned long HUG_TIMEOUT_MS = 40000;  // ms allowed for the wall-hug leg before giving up. Gives up mid-hug -> bigger.
+// -- Arm, pump, sensors --
+const float SAMPLE_ML          = 30.0;   // water to pump (mL). Must stay at least 20.
+const float PUMP_ML_PER_S      = 2.5;    // pump speed (mL per second, from the pump test). Collects too much -> bigger. Too little -> smaller.
+const int   ARM_STOW_DEG       = 20;     // servo angle with the arm folded up for driving.
+const int   ARM_DOWN_DEG       = 96;     // servo angle with the arm down at the water. Tube not in the water -> change a few degrees at a time.
+const unsigned long SERVO_STEP_MS = 15;  // ms per degree of arm movement. Arm too jerky / Arduino resets -> bigger. Too slow -> smaller.
+const unsigned long ARM_SETTLE_MS = 500; // ms to wait after lowering the arm before measuring. Depth readings jumpy -> bigger.
+const float SENSOR_HEIGHT_MM   = 0;      // height (mm) of the depth sensor above the pool bottom. Depth reads too high -> smaller. Too low -> bigger.
+const int   COLOR_POLLUTED_THRESH = 400; // color sensor cutoff. Clean water reads "polluted" -> smaller. Polluted reads "clean" -> bigger.
+// ============================================================ end of TUNABLES
+
+// ============================================================
 // OTV config: EVERY pin, limit, and tunable lives here.
 // Other files use these names, never raw numbers.
 // Anything marked [MEASURE] is a placeholder: measure it on the
@@ -115,7 +146,6 @@ const int PIN_COLOR_LED   = A3;  // TCS3200 LED/OE
 // ---- Front ultrasonic obstacle stop ----
 // The HC-SR04 beam is ~30 deg wide, so in the wall-hug gap it can see the
 // obstacle sides and the wall next to the lane. Keep this short.
-const int FRONT_OBSTACLE_MM   = 150;  // [MEASURE] obstacle if a valid echo is closer than this
 const int FRONT_HITS_NEEDED   = 2;    // consecutive close pings before stopping (filters ghost echoes)
 #endif
 
@@ -126,7 +156,6 @@ const bool LEFT_INVERT  = false;  // confirmed 2026-11-13 (drive_arm_test: both 
 const bool RIGHT_INVERT = false;  // confirmed 2026-11-13 (drive_arm_test: both wheels forward)
 
 // ---- Navigation tuning ----
-const int   DRIVE_PWM          = 140;    // straight-line drive PWM
 // followLine PWM (wall hug, descent to the limbo lane, last leg, 7b lanes).
 // The hug gap leaves ~2.5 cm each side of the sim Tank, so it must track tightly.
 #if SIM && !defined(ARDUINO_AVR_MEGA2560)
@@ -134,17 +163,12 @@ const int   FOLLOW_PWM         = 70;     // sim Tank: v = PWM/510 m/s, so 140 = 
 #else
 const int   FOLLOW_PWM         = DRIVE_PWM;  // robot (~7.5 cm/s) and physical Tank: already slow, and tested at DRIVE_PWM
 #endif
-const int   MIN_TURN_PWM       = 70;     // [MEASURE] lowest PWM that still turns in place
-const float TURN_GAIN          = 120.0;  // turn PWM per rad of heading error
-const float HEADING_GAIN       = 150.0;  // drive correction PWM per rad of heading error
-const float TURN_TOL_RAD       = 0.08;   // turnTo done inside this error
 const float REALIGN_RAD        = 0.50;   // driveTo stops and turns in place above this error
 // followLine (wall hug, descent to the limbo lane, last leg, 7b lanes) steers
 // back onto its line at most MAX_MERGE_RAD off +x, and only stops to turn in
 // place above FOLLOW_REALIGN_RAD, so it never spins next to a wall or column.
 const float MAX_MERGE_RAD       = 0.60;  // tune with otvsimcheck
 const float FOLLOW_REALIGN_RAD  = 1.20;
-const float POS_TOL_M          = 0.05;   // waypoint reached inside this distance
 // driveTo slows down inside APPROACH_SLOW_M of its target, to no less than
 // APPROACH_MIN_PWM. The sim Tank at DRIVE_PWM moves ~12 cm per loop pass and
 // overshot the hug staging point by up to 9 cm (then spun into the wall).
@@ -163,8 +187,6 @@ const unsigned long VISION_LOST_MS   = 3000;   // give up a move after this long
 const unsigned long WIFI_CONNECT_MS  = 30000;  // R4 begin() returns before WiFi connects (chosen, not specified)
 const unsigned long VISION_START_MS  = 10000;  // give up the run if no marker at start (after WiFi is up)
 const unsigned long MOVE_TIMEOUT_MS  = 15000;  // per turnTo call; driveTo adds travel time below
-const float DRIVE_SPEED_MPS          = 0.075;  // [MEASURE] MS2 operating speed 7.54 cm/s; sizes driveTo timeouts
-const unsigned long BACKUP_MS        = 800;    // reverse time after the mission
 
 // ---- Footprint: everything the OTV must keep inside the arena ----
 // Half sizes of the whole body (wheels included), centered on the marker.
@@ -195,7 +217,6 @@ const float MISSION_TOP_Y     = 1.5;   // square A center (doc)
 const float MISSION_BOT_X     = 0.5;   // square B center (doc)
 const float MISSION_BOT_Y     = 0.5;   // square B center (doc)
 const float ARENA_MID_Y       = 1.0;   // A and B are 1.0 m apart, split at y = 1.0 (doc)
-const float MISSION_STOP_DIST = 0.30;  // [MEASURE] tune so the OTV front ends within 150 mm of the pool edge
 // Obstacles: 0.2 m wide x 0.5 m tall, columns centered at x = 1.5 and 2.3,
 // rows spanning y = 0.25..1.75. That leaves a 0.25 m gap to each wall
 // (MS2: OTV < 25 cm wide for the obstacle-to-wall gap).
@@ -210,7 +231,6 @@ const float WALL_HUG_GAIN     = 5.0;   // aim-back angle (rad) per m off the lin
 // column 1 (x 1.4-1.6). HUG_STAGE_Y is as close to the hug line as a turn
 // in place allows: its turning circle stays WALL_TURN_MARGIN_M off the wall.
 // (Turning in place 12.5 cm from the wall swung the physical Tank into it.)
-const float HUG_STAGE_X       = 0.8;   // [MEASURE]
 #if SIM && defined(ARDUINO_AVR_MEGA2560)
 const float HUG_STAGE_Y       = 1.65;  // physical ENES100 Tank (Mega): verified 2026-11-06; its size is unmeasured
 #else
@@ -218,11 +238,8 @@ const float HUG_STAGE_Y       = ARENA_H - OTV_TURN_RADIUS_M - WALL_TURN_MARGIN_M
 #endif
 // Leave the hug line once the whole body is past column 2 (right edge 2.4),
 // then followLine curves down to the limbo lane (no turn in place by the wall).
-const float HUG_END_X         = 2.55;  // [MEASURE] 2.4 + half length + 6 cm
-const float LIMBO_ALIGN_X     = 3.0;   // [MEASURE] be on the limbo lane by here (open zone 2.8-3.4)
 const float LIMBO_LANE_Y      = 1.5;   // center of the limbo opening (doc)
 const float GOAL_X            = 3.7;   // center of the goal zone 3.4-4.0 (doc)
-const unsigned long HUG_TIMEOUT_MS = 40000;  // [MEASURE] 1.7 m hug at ~7 cm/s on the robot
 // If the limbo rod hides the marker on the last leg, drive straight for the
 // remaining distance (from the last seen x and DRIVE_SPEED_MPS), capped here.
 const unsigned long LIMBO_BLIND_MAX_MS = 6500;   // chosen: ~0.5 m at 7.5 cm/s, so it can't reach the east wall from the limbo
@@ -246,19 +263,11 @@ const unsigned long OBSTACLE_BACKUP_MS = 500;  // reverse time per hit (chosen, 
 const int   MAX_OBSTACLE_HITS      = 3;     // give up the move after this many hits (chosen)
 
 // ---- Mission ----
-const float SAMPLE_ML        = 30.0;   // requirement is >= 20 mL
-const float PUMP_ML_PER_S    = 2.5;    // [MEASURE] unmeasured placeholder from Walter's sketch
-const int   ARM_STOW_DEG     = 20;     // [MEASURE] arm folded flat over the chassis (Walter's sketch: 20)
-const int   ARM_DOWN_DEG     = 96;     // mission height: arm ultrasonic parallel to the water, pump tube in it (set live with otvarm on the robot 2026-11-16; Walter's sketch had 160)
 const bool  SERVO2_MIRRORED  = true;   // servo 2 faces servo 1 (confirmed by Micah 2026-11-13)
-const unsigned long SERVO_STEP_MS = 15;  // per 1 degree of sweep (limits 5 V rail spikes)
-const unsigned long ARM_SETTLE_MS = 500; // after arm down, before reading (chosen, not specified)
 const int   US_SAMPLES       = 25;     // ultrasonic readings per measurement (median is used)
 const unsigned long US_TIMEOUT_US = 30000;  // pulseIn timeout
 const unsigned long US_PING_GAP_MS = 60;    // HC-SR04 datasheet: >= 60 ms between pings (old echoes)
 const float US_MM_PER_US     = 0.343;  // speed of sound; divide by 2 for round trip
-const float SENSOR_HEIGHT_MM = 0;      // [MEASURE] sensor height above bowl bottom (owned by the depth teammate)
-const int   COLOR_POLLUTED_THRESH = 400;  // [MEASURE] pulse width below this = color seen (uncalibrated)
 const unsigned long COLOR_SETTLE_MS = 200; // between R/G/B reads (from Adiel's sketch)
 const int   COLOR_SAMPLES    = 5;      // pulse widths per channel (median is used)
 const unsigned long COLOR_TIMEOUT_US = 100000;  // pulseIn timeout; 0 = no reading, ignored
