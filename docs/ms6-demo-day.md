@@ -23,10 +23,25 @@ Mission I-III are not defined in the MS6 doc (probably pollution, depth,
 
 ## Every attempt
 
-1. OTV on USB, kill switch OFF. Run the command (uploads, prints the steps).
-2. Unplug USB. Place the OTV as the steps say. Kill switch ON.
-3. It connects to the vision system (up to 30 s) and runs. Prints end with `MS6: done`.
-4. Retry: kill switch OFF, put it back, kill switch ON (no re-upload needed).
+The MS6 commands only build for the OTV: `SIM=0`, UNO R4 WiFi, marker 80,
+room 1120. They refuse to upload if the board on USB is the Tank's Mega.
+
+The vision connection is automatic. The R4 joins the vision system's WiFi
+and registers as H2Woah! / marker 80 in `setup()` (code in otv.ino). Nothing
+to do on the laptop for the robot to connect. The laptop only needs campus
+WiFi for `otvwatch` and the vision page.
+
+1. OTV on USB, kill switch OFF. Open the `otv` menu (desktop shortcut) and
+   press the key (`n`, `i` or `o`), or type the command. It uploads and prints the steps.
+2. Open a second PowerShell window and run `otvwatch` (menu `w`). It shows
+   our live x / y / theta and every line the OTV prints.
+3. Unplug USB. Put the OTV where the steps say, marker 80 facing up. Kill switch ON.
+4. Within 30 s `otvwatch` shows `Connecting...`, then `Vision system connected`, then
+   the run. Prints end with `MS6: done`.
+   - If the marker can't be seen at the start, it prints `No vision at start, aborting run`
+     and doesn't move: check the marker is flat, uncovered and in the camera's view.
+5. Retry: kill switch OFF, put it back, kill switch ON (no re-upload needed;
+   power-on restarts the run).
 
 ## If something goes wrong
 
