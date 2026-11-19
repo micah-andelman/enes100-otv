@@ -5,14 +5,22 @@ attempts. Every command below is also a key in the `otv` menu (desktop
 shortcut **OTV**). Results and prints: `otvwatch` (menu `w`) in a second
 PowerShell window, or the vision page (`otvvision`, room 1120, marker 72).
 
-| Objective | Command / key | Covers |
+`otv` opens the MS6 menu (`x` = everything else: MS5, Tank, bench tests).
+
+| Step | Command / key | Covers |
 |---|---|---|
+| Vision check (first, OTV on USB in the arena) | `otvvisioncheck` / `v` | marker 72 seen, x/y/theta follow the OTV |
+| Arm, depth + pump check | `otvarm` / `a` | `down` / `stow`, `p10` = pump 10 s into a cup |
 | Nav 1: within 150 mm of the mission site | `otvsite` / `n` | Nav 1 + Mission I-III |
 | Mission I-III (OTV placed at the pool) | `otvmission` / `i` | Mission I-III |
 | Nav 2 + Nav 3: past the obstacles, into the goal | `otvobst` / `o` | Nav 2 + Nav 3 |
 
 Mission I-III are not defined in the MS6 doc (probably pollution, depth,
->= 20 mL sample): confirm with the instructor.
+>= 20 mL sample): confirm with the instructor. The color sensor is off
+(`USE_COLOR_SENSOR` 0), so pollution is not sent.
+
+Each run command uploads, prints WHAT TO DO / WATCH FOR / SEND CLAUDE, then
+Press Enter starts `otvwatch` in the same window.
 
 ## Before the session
 

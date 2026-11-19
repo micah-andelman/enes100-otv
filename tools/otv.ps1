@@ -86,7 +86,7 @@ function otvhelp {
   otvrun robot            force the robot build (SIM=0, R4)
   otvrun robot -Test N    robot bench test: 1 drive, 2 pump, 3 arm, 4 ultrasonic,
                           5 color, 6 vision print, 7 front ultrasonic, 8 arm cal
-  otvarm                  robot: live arm + depth calibration. Type an angle (150), +/-,
+  otvarm                  robot: live arm + depth calibration. down/stow, or an angle (150), +/-,
                           d/s to keep down/stow, e (empty bowl) or k30 (30 mm water)
                           for SENSOR_HEIGHT_MM, p pump, ? for the config.h lines
   otvbuild [tank|robot]   compile only, no board needed
@@ -100,6 +100,7 @@ function otvhelp {
   otvpull                 pull teammate sketches from Google Drive
 
 MS6 demos (any 4 of 6 objectives, one at a time, on the robot; vision system on):
+  otvvisioncheck          OTV on USB in the arena: prints x/y/theta for marker 72 (do this first)
   otvsite                 Nav 1 + Mission I-III: start square -> pool -> measure, pump, send, stop
   otvmission              Mission I-III only: OTV placed at the pool by hand
   otvobst                 Nav 2 + Nav 3: landing zone -> wall hug past the obstacles -> limbo -> goal
@@ -331,7 +332,7 @@ function Invoke-OtvSimTask([int]$Task, [string]$Name, [string]$Title, [string]$B
 }
 
 # Compiles + uploads a robot demo. $Flags are extra -D flags.
-function Invoke-OtvRobotTask([string]$Title, [string]$Flags, [string]$Next, [switch]$Monitor, [string]$Label = 'MS5') {
+function Invoke-OtvRobotTask([string]$Title, [string]$Flags, [string]$Next, [switch]$Monitor, [switch]$Watch, [string]$Label = 'MS5') {
     $b = Find-OtvBoard 'robot'
     if (-not $b) { Write-Otv 'No board found. Plug in the OTV (R4) over USB.' Red; return }
     if ($b.Target -and $b.Target -ne 'robot') { Write-Otv "That's the Tank ($($b.Port)), not the OTV R4." Red; return }
@@ -342,6 +343,10 @@ function Invoke-OtvRobotTask([string]$Title, [string]$Flags, [string]$Next, [swi
     Write-Otv 'Upload OK' Green
     Write-Host "`n$Next"
     if ($Monitor) { otvmonitor -Port $b.Port }
+    if ($Watch) {
+        Read-Host "`nPress Enter to watch the run here (live pose + OTV prints; Ctrl+C to stop)" | Out-Null
+        otvwatch
+    }
 }
 
 function otv2 {
@@ -475,34 +480,71 @@ monitor to run: arm down, pump 2 s, arm stow. Repeatable. Ctrl+C to quit.
 # attempts. Each demo runs part of the full mission (MS6_TASK, otv/ms6.ino)
 # so a failed attempt is quick to retry. The vision system must be running.
 
+# Vision check: the OTV stays on USB and prints what the vision system sends.
+function otvvisioncheck {
+    Invoke-OtvRobotTask 'vision check (bench test 6, marker 72)' '-DTEST_MODE=6' -Label 'MS6' @"
+WHAT TO DO
+  1. Keep USB plugged in (kill switch can stay OFF). OTV in the arena, marker 72 flat
+     and facing up, nothing covering it.
+  2. Wait up to 30 s. Lines like this start printing:
+       x=0.52 y=1.48 theta=-1.57 visible=yes
+  3. Move the OTV by hand: x grows toward the limbo, y grows toward the top wall,
+     theta = 0 facing the limbo, +1.57 facing the top wall.
+GOOD:  visible=yes and the numbers follow the OTV.
+BAD:   visible=no -> marker covered, tilted or out of camera view.
+       Zeros that never change -> not connected (room 1120? vision page up?).
+SEND CLAUDE: one line with the OTV still, and whether the numbers followed it.
+Ctrl+C to stop.
+"@ -Monitor
+}
+
 function otvsite {
-    Invoke-OtvRobotTask 'Nav 1 + mission (start -> mission site -> mission)' '-DMS6_TASK=1' -Label 'MS6' @"
-Shows Nav 1 (within 150 mm of the mission site) + Mission I-III in one attempt.
-  1. Unplug USB. Put the OTV in its start square (any heading allowed by the rules).
-  2. Kill switch ON. It connects to the vision system (up to 30 s), drives to
-     the pool, measures, pumps, sends the results, and stops at the pool.
-  Retry: kill switch OFF, put it back, kill switch ON.
-  Results + prints: otvwatch (or the vision page).
+    Invoke-OtvRobotTask 'Nav 1 + mission (start square -> pool -> mission)' '-DMS6_TASK=1' -Label 'MS6' -Watch @"
+OBJECTIVES: Nav 1 (within 150 mm of the pool) + mission (depth, sample).
+WHAT TO DO
+  1. Empty the sample bottle. Unplug USB. Put the OTV in either start square,
+     marker 72 up, any heading.
+  2. Kill switch ON, step back. Within 30 s it connects, drives to the other
+     square's pool, stops, lowers the arm, measures depth, pumps, stows the arm,
+     sends the depth, and stops for good. Last line: MS6: done
+WATCH FOR (below, after you press Enter)
+  MS6: marker to pool center (m) = ...    Mission: raw depth mm = ...    Mission sent: depth mm = ...
+RETRY: kill switch OFF, put it back, kill switch ON (no upload needed).
+SEND CLAUDE: how far the OTV's front ended from the pool edge (mm), the depth it
+sent vs the real depth, mL in the bottle, and anything odd (wobble, overshoot, bumps).
 "@
 }
 
 function otvmission {
-    Invoke-OtvRobotTask 'mission only (OTV placed at the pool)' '-DMS6_TASK=2' -Label 'MS6' @"
-Shows Mission I-III without driving.
-  1. Unplug USB. Place the OTV at the pool by hand, arm side over the water.
-  2. Kill switch ON, hands clear of the arm. Once connected (up to 30 s) it
-     lowers the arm, measures, pumps, stows, and sends the results.
-  Results + prints: otvwatch (or the vision page).
+    Invoke-OtvRobotTask 'mission only (OTV placed at the pool)' '-DMS6_TASK=2' -Label 'MS6' -Watch @"
+OBJECTIVES: mission (depth, sample), no driving.
+WHAT TO DO
+  1. Empty the sample bottle. Unplug USB.
+  2. Place the OTV at the pool by hand so the arm will be over the water when lowered.
+  3. Kill switch ON, hands clear of the arm. Within 30 s it connects, lowers the arm
+     to horizontal, measures depth, pumps the sample, stows, sends the depth.
+     Last line: MS6: done
+WATCH FOR (below, after you press Enter)
+  Mission: raw depth mm = ...    Mission sent: depth mm = ...
+RETRY: kill switch OFF, empty the bottle, kill switch ON (no upload needed).
+SEND CLAUDE: the depth it sent vs the real depth, and how many mL are in the bottle.
 "@
 }
 
 function otvobst {
-    Invoke-OtvRobotTask 'Nav 2 + Nav 3 (landing zone -> past the obstacles -> goal)' '-DMS6_TASK=3' -Label 'MS6' @"
-Shows Nav 2 (completely past the 3 obstacles) + Nav 3 (completely in the goal zone).
-  1. Unplug USB. Put the OTV anywhere in the landing zone (x < 0.8 m), any heading.
-  2. Kill switch ON. It drives to the staging point, hugs the top wall past
-     the obstacles, goes under the limbo, and stops in the goal zone.
-  Retry: kill switch OFF, put it back, kill switch ON.
+    Invoke-OtvRobotTask 'Nav 2 + Nav 3 (landing zone -> past the obstacles -> goal)' '-DMS6_TASK=3' -Label 'MS6' -Watch @"
+OBJECTIVES: Nav 2 (completely past the 3 obstacles) + Nav 3 (completely in the goal zone).
+WHAT TO DO
+  1. Unplug USB. Arm stowed. Put the OTV anywhere in the landing zone (x < 0.8 m),
+     clear of the pools, marker 72 up, any heading.
+  2. Kill switch ON, step back. It drives to x = 0.8, up toward the top wall, hugs
+     the top wall past the obstacles, stops and lowers the arm, goes under the
+     limbo, and stops in the goal zone. Last line: MS6: done
+  Be ready to hit the kill switch if it is about to hit a wall, obstacle or the limbo.
+WATCH FOR (below, after you press Enter)
+  Pose at ... lines after each leg; "Obstacle ahead: backing up" if the front sensor stopped it.
+RETRY: kill switch OFF, put it back, kill switch ON (no upload needed).
+SEND CLAUDE: where it went wrong (which leg, what it hit or how close), or that it made it.
 "@
 }
 
@@ -532,80 +574,88 @@ function Read-OtvNumber([string]$Prompt, [int]$Default) {
     return $Default
 }
 
+# Main menu: MS6 only. 'x' switches to everything else ($OtvMenuMore) and back.
 $script:OtvMenu = @(
-    @{ Section = 'MS6 ON THE ROBOT   (plug the OTV in over USB, then unplug + kill switch ON to run)' }
-    @{ Key = 'n';  Title = 'Nav 1 + mission';       When = 'start square -> pool -> measure, pump, send';   Run = { otvsite } }
-    @{ Key = 'i';  Title = 'Mission only';          When = 'OTV placed at the pool by hand';                Run = { otvmission } }
-    @{ Key = 'o';  Title = 'Nav 2 + Nav 3';         When = 'landing zone -> past the obstacles -> goal';    Run = { otvobst } }
-    @{ Section = 'MS6 DRY RUN IN THE SIMULATOR   (same code; runs by itself in its own Chrome window)' }
-    @{ Key = 'ns'; Title = 'Nav 1 + mission (sim)'; When = 'random start, stub mission';                    Run = { otvsitesim } }
-    @{ Key = 'is'; Title = 'Mission only (sim)';    When = 'stub mission, sends results';                   Run = { otvmissionsim } }
-    @{ Key = 'os'; Title = 'Nav 2 + Nav 3 (sim)';   When = 'random obstacles, wall hug to the goal';        Run = { otvobstsim } }
-    @{ Section = 'MS5 ON THE ROBOT   (plug the OTV in over USB first)' }
-    @{ Key = '2';  Title = 'Forward 3.4 m';         When = 'uploads, then unplug + kill switch; catch it';  Run = { otv2 -Seconds (Read-OtvNumber 'Seconds to drive' 45) } }
-    @{ Key = '3';  Title = '3 x 90 deg turns';      When = 'uploads, then unplug + kill switch';            Run = { otv3 -TurnMs (Read-OtvNumber 'ms per 90 deg turn' 950) } }
-    @{ Key = '8';  Title = 'Obstacle sensor';       When = 'stays on USB; live front ultrasonic readout';   Run = { otv8 } }
-    @{ Key = '9';  Title = 'Mission (depth) sensor';When = 'stays on USB; live arm ultrasonic readout';     Run = { otv9 } }
-    @{ Key = '10'; Title = 'Arm + pump';            When = 'USB + kill switch ON; Enter runs it';           Run = { otv10 } }
-    @{ Section = 'MS5 IN THE SIMULATOR   (runs by itself in its own Chrome window)' }
-    @{ Key = '4';  Title = 'Wireless receive';      When = 'prints x, y, theta';                            Run = { otv4 } }
-    @{ Key = '5';  Title = 'Wireless transmit';     When = 'sends depth + water type';                      Run = { otv5 } }
-    @{ Key = '6';  Title = 'Navigation, no obstacles'; When = 'start -> mission site -> before the limbo';  Run = { otv6 } }
-    @{ Key = '7a'; Title = 'Obstacles: wall hug';   When = 'our real route, start to goal';                 Run = { otv7a } }
-    @{ Key = '7b'; Title = 'Obstacles: detour';     When = 'sees an obstacle, backs up, changes lane';      Run = { otv7b } }
-    @{ Section = 'MS5 ON THE PHYSICAL TANK   (real vision system, room 1120; upload, unplug, power on)' }
-    @{ Key = '4t'; Title = 'Wireless receive (Tank)'; When = 'real vision system; x, y, theta print here';  Run = { otv4tank -Marker (Read-OtvNumber 'Marker number on the Tank' 54) } }
-    @{ Key = '5t'; Title = 'Wireless transmit (Tank)'; When = 'real vision system; resends every 15 s';          Run = { otv5tank -Marker (Read-OtvNumber 'Marker number on the Tank' 54) } }
-    @{ Section = 'ROBOT DEMOS, DRY RUN IN THE SIMULATOR   (same code; checks the logic)' }
-    @{ Key = '2s'; Title = 'Forward (sim)';          When = 'faces +x, open-loop drive, prints distance';   Run = { otv2sim } }
-    @{ Key = '3s'; Title = '3 x 90 deg turns (sim)'; When = 'prints degrees turned each time';              Run = { otv3sim } }
-    @{ Key = '8s'; Title = 'Obstacle sensor (sim)';  When = 'sensor vs true distance, stops at threshold';  Run = { otv8sim } }
-    @{ Key = '10s';Title = 'Arm + pump (sim)';       When = 'sequence + messages only (no servos in sim)';  Run = { otv10sim } }
+    @{ Section = '1. BEFORE THE RUNS   (OTV on USB)' }
+    @{ Key = 'c';  Title = 'Find the OTV';            When = 'is it plugged in, which COM port';                           Run = { otvconnect } }
+    @{ Key = 'v';  Title = 'Vision check';            When = 'in the arena: x/y/theta for marker 72 (do this first)';      Run = { otvvisioncheck } }
+    @{ Key = 'a';  Title = 'Arm, depth + pump check'; When = 'kill switch ON: type down / stow, p10 = pump 10 s into a cup'; Run = { otvarm } }
+    @{ Section = '2. MS6 RUNS   (uploads; then unplug, place the OTV, kill switch ON, watch here)' }
+    @{ Key = 'n';  Title = 'Nav 1 + mission';         When = 'start square -> pool -> depth + sample';                     Run = { otvsite } }
+    @{ Key = 'i';  Title = 'Mission only';            When = 'OTV placed at the pool by hand -> depth + sample';           Run = { otvmission } }
+    @{ Key = 'o';  Title = 'Nav 2 + Nav 3';           When = 'landing zone -> past the obstacles -> under the limbo -> goal'; Run = { otvobst } }
+    @{ Key = 'w';  Title = 'Watch the vision system'; When = 'live pose + OTV prints (again, or in a 2nd window)';         Run = { otvwatch } }
+    @{ Section = '3. OTHER' }
+    @{ Key = 'd';  Title = 'Dry run in the simulator'; When = 'the same n / i / o code in the browser sim, no robot';      Run = {
+        $w = (Read-Host 'Which one: n (Nav 1 + mission), i (mission only), o (Nav 2 + 3)').Trim().ToLower()
+        switch ($w) { 'n' { otvsitesim } 'i' { otvmissionsim } 'o' { otvobstsim } default { Write-Otv 'Pick n, i or o.' Yellow } } } }
+    @{ Key = 'm';  Title = 'Serial monitor';          When = 'OTV on USB';                                                 Run = { otvmonitor } }
+    @{ Key = 'x';  Title = 'More...';                 When = 'MS5 demos, Tank, bench tests, full mission, sim tools';      Run = { } }
+)
+
+$script:OtvMenuMore = @(
     @{ Section = 'FULL MISSION + BENCH TESTS' }
-    @{ Key = 'r';  Title = 'Full mission (robot)';  When = 'needs the vision system in the room';           Run = { otvrun robot } }
-    @{ Key = 't';  Title = 'Full mission (Tank)';   When = 'Tank power OFF while on USB';                   Run = { otvrun tank } }
-    @{ Key = 'b';  Title = 'Bench test';            When = '1 drive 2 pump 3 arm 4 depth 5 color 6 vision 7 front 8 arm cal'; Run = {
+    @{ Key = 'r';  Title = 'Full mission (robot)';    When = 'needs the vision system in the room';           Run = { otvrun robot } }
+    @{ Key = 'b';  Title = 'Bench test';              When = '1 drive 2 pump 3 arm 4 depth 5 color 6 vision 7 front 8 arm cal'; Run = {
         $n = Read-OtvNumber 'Bench test number (1-8)' 1
         if ($n -lt 1 -or $n -gt 8) { Write-Otv 'Bench tests are 1-8.' Red; return }
         otvrun robot -Test $n
         otvmonitor } }
-    @{ Key = 'a';  Title = 'Arm + depth calibration'; When = 'type angles live; prints config.h values';     Run = { otvarm } }
+    @{ Key = 't';  Title = 'Full mission (Tank)';     When = 'Tank power OFF while on USB';                   Run = { otvrun tank } }
+    @{ Section = 'MS5 ON THE ROBOT' }
+    @{ Key = '2';  Title = 'Forward 3.4 m';           When = 'uploads, then unplug + kill switch; catch it';  Run = { otv2 -Seconds (Read-OtvNumber 'Seconds to drive' 45) } }
+    @{ Key = '3';  Title = '3 x 90 deg turns';        When = 'uploads, then unplug + kill switch';            Run = { otv3 -TurnMs (Read-OtvNumber 'ms per 90 deg turn' 950) } }
+    @{ Key = '8';  Title = 'Obstacle sensor';         When = 'stays on USB; live front ultrasonic readout';   Run = { otv8 } }
+    @{ Key = '9';  Title = 'Mission (depth) sensor';  When = 'stays on USB; live arm ultrasonic readout';     Run = { otv9 } }
+    @{ Key = '10'; Title = 'Arm + pump';              When = 'USB + kill switch ON; Enter runs it';           Run = { otv10 } }
+    @{ Section = 'MS5 IN THE SIMULATOR / ON THE TANK' }
+    @{ Key = '4';  Title = 'Wireless receive';        When = 'sim: prints x, y, theta';                       Run = { otv4 } }
+    @{ Key = '5';  Title = 'Wireless transmit';       When = 'sim: sends depth + water type';                 Run = { otv5 } }
+    @{ Key = '6';  Title = 'Navigation, no obstacles'; When = 'sim: start -> mission site -> before the limbo'; Run = { otv6 } }
+    @{ Key = '7a'; Title = 'Obstacles: wall hug';     When = 'sim: our real route, start to goal';            Run = { otv7a } }
+    @{ Key = '7b'; Title = 'Obstacles: detour';       When = 'sim: sees an obstacle, backs up, changes lane'; Run = { otv7b } }
+    @{ Key = '4t'; Title = 'Wireless receive (Tank)'; When = 'real vision system';                            Run = { otv4tank -Marker (Read-OtvNumber 'Marker number on the Tank' 54) } }
+    @{ Key = '5t'; Title = 'Wireless transmit (Tank)'; When = 'real vision system';                           Run = { otv5tank -Marker (Read-OtvNumber 'Marker number on the Tank' 54) } }
+    @{ Key = '2s'; Title = 'Forward (sim)';           When = 'dry run of otv2';                               Run = { otv2sim } }
+    @{ Key = '3s'; Title = '3 x 90 deg turns (sim)';  When = 'dry run of otv3';                               Run = { otv3sim } }
+    @{ Key = '8s'; Title = 'Obstacle sensor (sim)';   When = 'dry run of otv8';                               Run = { otv8sim } }
+    @{ Key = '10s';Title = 'Arm + pump (sim)';        When = 'dry run of otv10';                              Run = { otv10sim } }
     @{ Section = 'TOOLS' }
-    @{ Key = 'm';  Title = 'Serial monitor';        When = 'robot on USB';                                  Run = { otvmonitor } }
-    @{ Key = 'c';  Title = 'Find the board';        When = 'which board + COM port is plugged in';          Run = { otvconnect } }
-    @{ Key = 'w';  Title = 'Watch vision system';   When = 'our pose + Arduino prints, in this window';     Run = { otvwatch } }
-    @{ Key = 'v';  Title = 'Vision system page';    When = 'room 1120';                                     Run = { otvvision } }
-    @{ Key = 's';  Title = 'Full mission in the sim'; When = 'runs by itself in its own Chrome window';     Run = {
+    @{ Key = 's';  Title = 'Full mission in the sim'; When = 'runs by itself in its own Chrome window';       Run = {
         otvsim
         if ($LASTEXITCODE -ne 0) { Write-Otv 'SIM BUILD FAILED' Red; return }
         Start-OtvSimAuto (Join-Path $script:OtvRoot 'sim\otv_sim\otv_sim.ino') 'Randomize' } }
-    @{ Key = 'k';  Title = 'Check sim paths';       When = 'every sim demo x5: must finish inside the course'; Run = { otvsimcheck } }
-    @{ Key = 'p';  Title = 'Pull teammate code';    When = 'from Google Drive';                             Run = { otvpull } }
-    @{ Key = 'h';  Title = 'All typed commands';    When = 'otvhelp';                                       Run = { otvhelp } }
+    @{ Key = 'k';  Title = 'Check sim paths';         When = 'every sim demo x5: must finish inside the course'; Run = { otvsimcheck } }
+    @{ Key = 'vp'; Title = 'Vision system page';      When = 'room 1120, in the browser';                     Run = { otvvision } }
+    @{ Key = 'p';  Title = 'Pull teammate code';      When = 'from Google Drive';                             Run = { otvpull } }
+    @{ Key = 'h';  Title = 'All typed commands';      When = 'otvhelp';                                       Run = { otvhelp } }
+    @{ Key = 'x';  Title = 'Back';                    When = 'to the MS6 menu';                               Run = { } }
 )
 
-function Show-OtvMenu {
+function Show-OtvMenu($Items, [string]$Title) {
     Clear-Host
-    Write-Otv '  OTV  -  Team H2Woah!'
-    foreach ($item in $script:OtvMenu) {
+    Write-Otv "  OTV  -  Team H2Woah!  -  $Title"
+    foreach ($item in $Items) {
         if ($item.Section) { Write-Host ''; Write-Host "  $($item.Section)" -ForegroundColor Yellow; continue }
         Write-Host ('   {0,-3}' -f $item.Key) -ForegroundColor Green -NoNewline
-        Write-Host (' {0,-27}' -f $item.Title) -NoNewline
+        Write-Host (' {0,-26}' -f $item.Title) -NoNewline
         Write-Host $item.When -ForegroundColor DarkGray
     }
     Write-Host ''
-    Write-Host '   q   quit' -ForegroundColor DarkGray
-    Write-Host '  (Ctrl+C in a monitor drops you to the prompt; type otv to come back.)' -ForegroundColor DarkGray
+    Write-Host '   q   quit     (Ctrl+C in a monitor or watch drops you to the prompt; type otv to come back)' -ForegroundColor DarkGray
     Write-Host ''
 }
 
 function otv {
+    $more = $false
     while ($true) {
-        Show-OtvMenu
+        if ($more) { Show-OtvMenu $script:OtvMenuMore 'more' } else { Show-OtvMenu $script:OtvMenu 'MS6' }
         $key = (Read-Host '  Pick').Trim().ToLower()
         if ($key -eq 'q') { return }
         if (-not $key) { continue }
-        $item = $script:OtvMenu | Where-Object { $_.Key -eq $key } | Select-Object -First 1
+        if ($key -eq 'x') { $more = -not $more; continue }
+        $items = if ($more) { $script:OtvMenuMore } else { $script:OtvMenu }
+        $item = $items | Where-Object { $_.Key -eq $key } | Select-Object -First 1
         if (-not $item) { continue }
         Write-Host ''
         & $item.Run
