@@ -146,7 +146,7 @@ const int MARKER_ID         = MARKER_OVERRIDE;
 #elif SIM
 const int MARKER_ID         = 54;  // ENES100 physical Tank (Tank-mode builds)
 #else
-const int MARKER_ID         = 80;  // our OTV
+const int MARKER_ID         = 72;  // our OTV (was 80 until 2026-11-18)
 #endif
 const int ROOM_NUMBER       = 1120;
 // WiFi module TX/RX pins: ignored on the R4 (onboard WiFi). The physical

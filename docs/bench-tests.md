@@ -36,7 +36,7 @@ likely thing to damage something later.
 | 4 | Ultrasonic | Arm down over a bowl, ruler | `SENSOR_HEIGHT_MM` |
 | 8 | Arm + depth calibration | Bowl, water, ruler | `ARM_DOWN_DEG`, `ARM_STOW_DEG`, `SENSOR_HEIGHT_MM` (replaces 3 + 4) |
 | 5 | Color | Clean water + the plastic debris | `COLOR_POLLUTED_THRESH` |
-| 6 | Vision | Lab 1120 arena, marker 80 on top | nothing (confirms WiFi + marker) |
+| 6 | Vision | Lab 1120 arena, marker 72 on top | nothing (confirms WiFi + marker) |
 
 ---
 
@@ -146,7 +146,7 @@ Prints raw R/G/B pulse widths (lower = more of that color) and the decision ever
 
 Connects to the vision system, then prints x, y, theta, visible every 0.25 s.
 
-- [ ] In room 1120, arena WiFi up, marker 80 on top of the OTV.
+- [ ] In room 1120, arena WiFi up, marker 72 on top of the OTV.
 - [ ] Gets past connecting within 30 s.
 - [ ] `visible=yes` anywhere on the arena.
 - [ ] Place the OTV on square A and square B: about (0.5, 1.5) and (0.5, 0.5).

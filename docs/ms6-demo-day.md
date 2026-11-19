@@ -3,7 +3,7 @@
 MS6 = any 4 of 6 objectives on the real OTV, one at a time, unlimited
 attempts. Every command below is also a key in the `otv` menu (desktop
 shortcut **OTV**). Results and prints: `otvwatch` (menu `w`) in a second
-PowerShell window, or the vision page (`otvvision`, room 1120, marker 80).
+PowerShell window, or the vision page (`otvvision`, room 1120, marker 72).
 
 | Objective | Command / key | Covers |
 |---|---|---|
@@ -23,11 +23,11 @@ Mission I-III are not defined in the MS6 doc (probably pollution, depth,
 
 ## Every attempt
 
-The MS6 commands only build for the OTV: `SIM=0`, UNO R4 WiFi, marker 80,
+The MS6 commands only build for the OTV: `SIM=0`, UNO R4 WiFi, marker 72,
 room 1120. They refuse to upload if the board on USB is the Tank's Mega.
 
 The vision connection is automatic. The R4 joins the vision system's WiFi
-and registers as H2Woah! / marker 80 in `setup()` (code in otv.ino). Nothing
+and registers as H2Woah! / marker 72 in `setup()` (code in otv.ino). Nothing
 to do on the laptop for the robot to connect. The laptop only needs campus
 WiFi for `otvwatch` and the vision page.
 
@@ -35,7 +35,7 @@ WiFi for `otvwatch` and the vision page.
    press the key (`n`, `i` or `o`), or type the command. It uploads and prints the steps.
 2. Open a second PowerShell window and run `otvwatch` (menu `w`). It shows
    our live x / y / theta and every line the OTV prints.
-3. Unplug USB. Put the OTV where the steps say, marker 80 facing up. Kill switch ON.
+3. Unplug USB. Put the OTV where the steps say, marker 72 facing up. Kill switch ON.
 4. Within 30 s `otvwatch` shows our marker and `Vision system connected`, then
    the run. Prints end with `MS6: done`.
    - If the marker can't be seen at the start, it prints `No vision at start, aborting run`
@@ -55,5 +55,6 @@ Newest first. Date, what was run, what happened, what was changed.
 
 | Date | Run | Result | Change made |
 |---|---|---|---|
+| 2026-11-18 | New ArUco marker | — | `MARKER_ID` 80 → 72 (robot builds) |
 | 2026-11-18 | Set depth sensor height | Ruler, arm horizontal (servos unpowered) | `SENSOR_HEIGHT_MM` 0 → 95 |
 | 2026-11-18 | Bench test 8, arm physically horizontal (battery out, servos unpowered: the 20° the code sent did not apply) | Arm ultrasonic 90.7 mm, steady over ~10 readings; ruler says ~95 mm (reads ~4 mm short). Front ultrasonic 160 mm while touching the pool: pressed against a surface it reads past it (HC-SR04 blind zone ~2-3 cm). | none |

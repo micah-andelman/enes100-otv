@@ -25,7 +25,7 @@ $script:OtvRoot = Split-Path -Parent $PSScriptRoot
 
 $script:OtvTargets = @{
     tank  = @{ Fqbn = 'arduino:avr:mega';              Sim = 1; Name = 'Physical Tank (Mega, SIM=1, marker 54)' }
-    robot = @{ Fqbn = 'arduino:renesas_uno:unor4wifi'; Sim = 0; Name = 'OTV robot (UNO R4 WiFi, SIM=0, marker 80)' }
+    robot = @{ Fqbn = 'arduino:renesas_uno:unor4wifi'; Sim = 0; Name = 'OTV robot (UNO R4 WiFi, SIM=0, marker 72)' }
 }
 
 $script:OtvVisionUrl = 'http://lx-enes100-4.eng.umd.edu:8080/'
@@ -196,7 +196,7 @@ Next:
     } elseif ($Test -ne 0) {
         Write-Host "`nBench test loaded. Run 'otvmonitor' to see output (docs/bench-tests.md)."
     } else {
-        Write-Host "`nFull mission loaded. Watch the vision page (otvvision), marker 80, or run 'otvmonitor' while on USB."
+        Write-Host "`nFull mission loaded. Watch the vision page (otvvision), marker 72, or run 'otvmonitor' while on USB."
     }
 }
 
