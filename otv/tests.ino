@@ -101,7 +101,8 @@ static void testFrontUltrasonic() {
   } else {
     Serial.print("Front: ");
     Serial.print(mm);
-    Serial.println(mm < FRONT_OBSTACLE_MM ? " mm  obstacle" : " mm  clear");
+    if (frontIsHose(mm)) Serial.println(" mm  hose (ignored)  clear");
+    else Serial.println(mm < FRONT_OBSTACLE_MM ? " mm  obstacle" : " mm  clear");
   }
   delay(TEST_PRINT_MS);
 }
@@ -207,7 +208,7 @@ static void calLivePrint() {
   float front = pingMM(PIN_FRONT_US_TRIG, PIN_FRONT_US_ECHO);
   Serial.print(" | front ");
   if (front < 0) Serial.println("no echo");
-  else { Serial.print(front, 0); Serial.println(" mm"); }
+  else { Serial.print(front, 0); Serial.println(frontIsHose(front) ? " mm (hose, ignored)" : " mm"); }
 }
 
 static void testArmCal() {

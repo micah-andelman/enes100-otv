@@ -113,6 +113,14 @@ static bool inObstacleField(float x, float y) {
 }
 #endif
 
+// The pump hose hangs off the arm in front of the front ultrasonic and
+// echoes at FRONT_HOSE_MIN_MM..FRONT_HOSE_MAX_MM: not an obstacle.
+// Note: the HC-SR04 reports the nearest echo, so while the hose is in the
+// beam it can hide anything farther away.
+bool frontIsHose(float mm) {
+  return mm >= FRONT_HOSE_MIN_MM && mm <= FRONT_HOSE_MAX_MM;
+}
+
 bool obstacleAhead() {
 #if SIM
   float d = Tank.readDistanceSensor(SIM_OBSTACLE_SENSOR_ID);
@@ -131,7 +139,7 @@ bool obstacleAhead() {
   if (millis() - gFrontPingMs < US_PING_GAP_MS) return false;
   gFrontPingMs = millis();
   float mm = pingMM(PIN_FRONT_US_TRIG, PIN_FRONT_US_ECHO);
-  if (mm >= 0 && mm < FRONT_OBSTACLE_MM) gFrontHits++;
+  if (mm >= 0 && mm < FRONT_OBSTACLE_MM && !frontIsHose(mm)) gFrontHits++;
   else gFrontHits = 0;
   if (gFrontHits < FRONT_HITS_NEEDED) return false;
   gFrontHits = 0;  // consumed: the next stop needs fresh close pings

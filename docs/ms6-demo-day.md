@@ -55,6 +55,7 @@ Newest first. Date, what was run, what happened, what was changed.
 
 | Date | Run | Result | Change made |
 |---|---|---|---|
+| 2026-11-18 | Team decisions | Color sensor dropped. Pump hose hangs 50-65 mm in front of the front ultrasonic | `USE_COLOR_SENSOR` 0 (no WATER_TYPE sent); front readings 50-65 mm ignored (`FRONT_HOSE_MIN_MM`/`MAX_MM`) |
 | 2026-11-18 | Bench test 8: 101° was still above horizontal; lowered to 106°, confirmed horizontal by eye. `e` over the surface under the arm | 25-ping reading 90.9 mm (live 90.9-91.1). Right after the move it read 77.7 mm, then settled at 90.9 by the time `d`/`e` ran | `ARM_DOWN_DEG` 101 → 106, `SENSOR_HEIGHT_MM` 95 → 90.9 |
 | 2026-11-18 | Bench test 8, arm lowered 5° to 101° (horizontal) | Arm ultrasonic 90.9 mm, steady (matches the 90.7 mm horizontal reading) | `ARM_DOWN_DEG` 96 → 101 |
 | 2026-11-18 | Bench test 8, arm at `ARM_DOWN_DEG` 96 (battery in) | Arm ultrasonic 101-111 mm (jumps between ~101 and ~110.6); with `SENSOR_HEIGHT_MM` 95 the depth is -6 to -16 mm. Front ultrasonic 58 mm. 96 deg is not the position where 90.7 / 95 mm was measured. | test 8 now moves to `ARM_DOWN_DEG` on start |

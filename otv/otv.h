@@ -24,6 +24,7 @@ float readDistanceMM();
 int computeDepthMM();
 void readColorRaw(int *r, int *g, int *b);  // pointers: the simulator can't parse references
 bool isPolluted();
+bool frontIsHose(float mm);  // front ultrasonic reading is the pump hose (ignored)
 int snapDepthMM(int rawMM);  // nearest of 20/30/40; fallback if the reading failed
 void runMission();
 #if !SIM

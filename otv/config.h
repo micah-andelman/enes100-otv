@@ -13,6 +13,8 @@ const float POS_TOL_M          = 0.05;   // how close (meters) counts as "arrive
 const float DRIVE_SPEED_MPS    = 0.075;  // measured robot speed (meters per second); only sets how long a move may take. Moves give up early -> smaller.
 const unsigned long BACKUP_MS  = 800;    // how long (ms) it reverses away from the pool after the mission. Hits the pool turning away -> bigger.
 const int   FRONT_OBSTACLE_MM  = 150;    // front sensor: stop if something is closer than this (mm). Stops for the side wall -> smaller. Bumps obstacles -> bigger.
+const int   FRONT_HOSE_MIN_MM  = 50;     // front sensor readings from here...
+const int   FRONT_HOSE_MAX_MM  = 65;     // ...to here (mm) are the pump hose hanging off the arm: ignored. Still stops for the hose -> widen.
 // -- Route (meters in the arena: x 0-4 left to right, y 0-2 bottom to top) --
 const float MISSION_STOP_DIST  = 0.30;   // how far (m) from the pool center it stops. Must end within 15 cm of the pool edge. Too far from pool -> smaller. Hits pool -> bigger.
 const float HUG_STAGE_X        = 0.8;    // x where it drives up toward the top wall before the obstacles. Hits the top pool -> bigger.
@@ -27,7 +29,8 @@ const int   ARM_DOWN_DEG       = 106;    // servo angle with the arm down at the
 const unsigned long SERVO_STEP_MS = 15;  // ms per degree of arm movement. Arm too jerky / Arduino resets -> bigger. Too slow -> smaller.
 const unsigned long ARM_SETTLE_MS = 500; // ms to wait after lowering the arm before measuring. Depth readings jumpy -> bigger.
 const float SENSOR_HEIGHT_MM   = 90.9;   // sensor (e), arm at 106, 2026-11-18. height (mm) of the depth sensor above the pool bottom. Depth reads too high -> smaller. Too low -> bigger.
-const int   COLOR_POLLUTED_THRESH = 400; // color sensor cutoff. Clean water reads "polluted" -> smaller. Polluted reads "clean" -> bigger.
+#define USE_COLOR_SENSOR 0              // 0 = color sensor not used: the mission does not read it or send WATER_TYPE (team choice 2026-11-18). 1 = use it.
+const int   COLOR_POLLUTED_THRESH = 400; // color sensor cutoff (only with USE_COLOR_SENSOR 1). Clean water reads "polluted" -> smaller. Polluted reads "clean" -> bigger.
 // ============================================================ end of TUNABLES
 
 // ============================================================

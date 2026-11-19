@@ -12,6 +12,8 @@ const float POS_TOL_M = 0.05;
 const float DRIVE_SPEED_MPS = 0.075;
 const unsigned long BACKUP_MS = 800;
 const int FRONT_OBSTACLE_MM = 150;
+const int FRONT_HOSE_MIN_MM = 50;
+const int FRONT_HOSE_MAX_MM = 65;
 const float MISSION_STOP_DIST = 0.30;
 const float HUG_STAGE_X = 0.8;
 const float HUG_END_X = 2.55;
@@ -20,10 +22,10 @@ const unsigned long HUG_TIMEOUT_MS = 40000;
 const float SAMPLE_ML = 30.0;
 const float PUMP_ML_PER_S = 2.5;
 const int ARM_STOW_DEG = 20;
-const int ARM_DOWN_DEG = 96;
+const int ARM_DOWN_DEG = 106;
 const unsigned long SERVO_STEP_MS = 15;
 const unsigned long ARM_SETTLE_MS = 500;
-const float SENSOR_HEIGHT_MM = 0;
+const float SENSOR_HEIGHT_MM = 90.9;
 const int COLOR_POLLUTED_THRESH = 400;
 
 const char* const TEAM_NAME = "H2Woah!";
@@ -135,6 +137,7 @@ float readDistanceMM();
 int computeDepthMM();
 void readColorRaw(int *r, int *g, int *b);
 bool isPolluted();
+bool frontIsHose(float mm);
 int snapDepthMM(int rawMM);
 void runMission();
 void pumpRunMs(unsigned long ms);
@@ -233,14 +236,12 @@ void runMission() {
   if (rawDepthMM < 0) logMsg("Mission: depth reading FAILED, sending fallback (not data)");
   else logVal("Mission: raw depth mm = ", rawDepthMM);
   int depthMM = snapDepthMM(rawDepthMM);
-  bool polluted = isPolluted();
   logMsg("Mission: pumping sample");
   pumpDispenseML(SAMPLE_ML);
   armStow();
   Enes100.mission(DEPTH, depthMM);
-  Enes100.mission(WATER_TYPE, polluted ? FRESH_POLLUTED : FRESH_UNPOLLUTED);
   logVal("Mission sent: depth mm = ", depthMM);
-  logMsg(polluted ? "Mission sent: polluted" : "Mission sent: unpolluted");
+  logMsg("Mission: color sensor off (USE_COLOR_SENSOR 0), WATER_TYPE not sent");
 }
 float gLastX = 0;
 void navSetup() {
@@ -300,6 +301,9 @@ static bool inObstacleField(float x, float y) {
   if (fabs(x - OBST_COL1_X) <= OBST_HALF_W + OBST_HIT_MARGIN_M) return true;
   if (fabs(x - OBST_COL2_X) <= OBST_HALF_W + OBST_HIT_MARGIN_M) return true;
   return false;
+}
+bool frontIsHose(float mm) {
+  return mm >= FRONT_HOSE_MIN_MM && mm <= FRONT_HOSE_MAX_MM;
 }
 bool obstacleAhead() {
   float d = Tank.readDistanceSensor(SIM_OBSTACLE_SENSOR_ID);

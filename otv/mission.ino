@@ -220,15 +220,23 @@ void runMission() {
   if (rawDepthMM < 0) logMsg("Mission: depth reading FAILED, sending fallback (not data)");
   else logVal("Mission: raw depth mm = ", rawDepthMM);
   int depthMM = snapDepthMM(rawDepthMM);
+#if USE_COLOR_SENSOR
   bool polluted = isPolluted();
+#endif
 
   logMsg("Mission: pumping sample");
   pumpDispenseML(SAMPLE_ML);
   armStow();
 
   Enes100.mission(DEPTH, depthMM);
+#if USE_COLOR_SENSOR
   Enes100.mission(WATER_TYPE, polluted ? FRESH_POLLUTED : FRESH_UNPOLLUTED);
+#endif
 
   logVal("Mission sent: depth mm = ", depthMM);
+#if USE_COLOR_SENSOR
   logMsg(polluted ? "Mission sent: polluted" : "Mission sent: unpolluted");
+#else
+  logMsg("Mission: color sensor off (USE_COLOR_SENSOR 0), WATER_TYPE not sent");
+#endif
 }
