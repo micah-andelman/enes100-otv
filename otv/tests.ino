@@ -214,6 +214,11 @@ static void testArmCal() {
   if (!gTestDone) {
     gTestDone = true;
     calHelp();
+    // Go straight to the mission position (config.h), where depth is measured.
+    Serial.print("Moving the arm to mission height, ARM_DOWN_DEG = ");
+    Serial.println(gCalDownDeg);
+    armMoveTo(gCalDownDeg);
+    Serial.println("Arm should be horizontal over the water now. Not horizontal: +/- then d.");
   }
   while (Serial.available()) {
     char ch = Serial.read();
