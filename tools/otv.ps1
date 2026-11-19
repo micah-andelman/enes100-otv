@@ -1,4 +1,4 @@
-# OTV shortcut commands. Loaded by the PowerShell profile, so these work in
+﻿# OTV shortcut commands. Loaded by the PowerShell profile, so these work in
 # any PowerShell window (including the VS Code terminal):
 #
 #   otv                     menu: pick a task by key (also the OTV desktop shortcut)
@@ -29,6 +29,13 @@ $script:OtvTargets = @{
 }
 
 $script:OtvVisionUrl = 'http://lx-enes100-4.eng.umd.edu:8080/'
+
+# A number from otv/config.h (e.g. ARM_DOWN_DEG), so help text shows the calibrated value.
+function Get-OtvConfigValue([string]$Name) {
+    $m = Select-String -Path (Join-Path $script:OtvRoot 'otv\config.h') -Pattern "\b$Name\s*=\s*(-?[0-9.]+)\s*;" | Select-Object -First 1
+    if ($m) { return $m.Matches[0].Groups[1].Value }
+    return '?'
+}
 
 function Write-Otv([string]$msg, [string]$color = 'Cyan') { Write-Host $msg -ForegroundColor $color }
 
@@ -393,6 +400,7 @@ known heights and compare. Ctrl+C to quit.
 function otvarm {
     Invoke-OtvRobotTask 'arm + depth calibration (bench test 8)' '-DTEST_MODE=8' @"
 Kill switch ON. Type a command + Enter:
+  down = arm to mission height ($(Get-OtvConfigValue 'ARM_DOWN_DEG') deg)   stow = arm horizontal ($(Get-OtvConfigValue 'ARM_STOW_DEG') deg)
   150 = move arm to 150 deg   + / - = 1 deg (+5 / -5)
   d = keep this angle as ARM_DOWN_DEG (color sensor above water, tube in it)
   s = keep this angle as ARM_STOW_DEG

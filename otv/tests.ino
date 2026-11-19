@@ -122,6 +122,8 @@ unsigned long gCalLastPrint = 0;
 
 static void calHelp() {
   Serial.println("ARM CAL commands (type, then Enter):");
+  Serial.println("  down     move the arm to ARM_DOWN_DEG (mission height, from config.h)");
+  Serial.println("  stow     move the arm to ARM_STOW_DEG (horizontal, from config.h)");
   Serial.println("  150      move the arm to 150 deg (any 0-180)");
   Serial.println("  + / -    nudge 1 deg   (+5 / -5 = 5 deg)");
   Serial.println("  d        use this angle as ARM_DOWN_DEG (color sensor above water, tube in it)");
@@ -151,6 +153,9 @@ static float calSaveReading() {
 
 static void calCommand(const char *cmd) {
   char c = cmd[0];
+  // Calibrated positions by name, so nobody has to remember the numbers.
+  if (strcmp(cmd, "down") == 0) { armMoveTo(gCalDownDeg); gCalLastPrint = 0; return; }
+  if (strcmp(cmd, "stow") == 0) { armMoveTo(gCalStowDeg); gCalLastPrint = 0; return; }
   if (c >= '0' && c <= '9') {
     armMoveTo(atoi(cmd));
   } else if (c == '+' || c == '-') {
