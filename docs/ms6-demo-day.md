@@ -64,6 +64,7 @@ Newest first. Date, what was run, what happened, what was changed.
 
 | Date | Run | Result | Change made |
 |---|---|---|---|
+| 2026-11-18 | First full run on the course | Wiggled in the start square, never reached the mission site, then drove +x into an obstacle instead of along the top wall. Suspect turning reversed (L/R motors swapped) or marker 72 mounted rotated | added `otvcheck` (MS6_TASK 4, menu `hc`) to tell which |
 | 2026-11-18 | Uploaded the full run (`SIM=0`, marker 72) to the OTV | ready for the first course run | none |
 | 2026-11-18 | Sim: `otvsimcheck -Runs 3 -Only obst` (arm lowered before the limbo) | 3/3 PASS: all reached the goal (x 3.72-3.74), never outside the course, min obstacle gap 2.8 cm, limbo y 1.38-1.64 | none |
 | 2026-11-18 | Team decision | Stowed arm is too tall for the limbo | `legLimboAlign` stops after the wall hug and lowers the arm to `ARM_DOWN_DEG` before the limbo |

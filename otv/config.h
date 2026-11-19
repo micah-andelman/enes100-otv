@@ -109,13 +109,14 @@ const int   COLOR_POLLUTED_THRESH = 400; // color sensor cutoff (only with USE_C
 #define MS6_SITE      1   // start square -> mission site -> mission, stop (Nav 1 + Mission I-III)
 #define MS6_MISSION   2   // OTV placed at the pool by hand: mission only (Mission I-III)
 #define MS6_OBSTACLES 3   // OTV placed in the landing zone: wall hug -> limbo -> goal (Nav 2 + Nav 3)
+#define MS6_CHECK     4   // heading check: short left turn, forward, back; prints what vision saw
 #ifndef MS6_TASK
 #define MS6_TASK MS6_NONE
 #endif
 
 #if MS6_TASK != MS6_NONE
-#if (MS6_TASK < MS6_SITE) || (MS6_TASK > MS6_OBSTACLES)
-#error "MS6_TASK must be 1..3."
+#if (MS6_TASK < MS6_SITE) || (MS6_TASK > MS6_CHECK)
+#error "MS6_TASK must be 1..4."
 #endif
 #if (TEST_MODE != TEST_NONE) || (MS5_TASK != MS5_NONE)
 #error "Set only one of MS6_TASK, MS5_TASK, TEST_MODE."
@@ -187,6 +188,12 @@ const int PIN_COLOR_LED   = A3;  // TCS3200 LED/OE
 // obstacle sides and the wall next to the lane. Keep this short.
 const int FRONT_HITS_NEEDED   = 2;    // consecutive close pings before stopping (filters ghost echoes)
 #endif
+
+// ---- MS6 heading check (MS6_TASK 4, otvcheck) ----
+const int           CHECK_TURN_PWM  = 110;   // left-turn pulse power
+const unsigned long CHECK_TURN_MS   = 500;   // left-turn pulse length
+const unsigned long CHECK_DRIVE_MS  = 1500;  // forward / back pulse length (DRIVE_PWM)
+const unsigned long CHECK_SETTLE_MS = 1500;  // wait for vision to catch up before reading
 
 // ---- Drive (DO NOT RAISE MAX_PWM without asking Micah) ----
 // 6 V motors on a 9.6 V pack: cap at 60% (0.60 * 255 = 153).

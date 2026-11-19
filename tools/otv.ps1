@@ -101,6 +101,7 @@ function otvhelp {
 
 MS6 demos (any 4 of 6 objectives, one at a time, on the robot; vision system on):
   otvvisioncheck          OTV on USB in the arena: prints x/y/theta for marker 72 (do this first)
+  otvcheck                10 s heading check: turn direction + marker orientation
   otvsite                 Nav 1 + Mission I-III: start square -> pool -> measure, pump, send, stop
   otvmission              Mission I-III only: OTV placed at the pool by hand
   otvfull                 FULL RUN: start -> pool -> mission -> obstacles -> limbo -> goal
@@ -499,6 +500,20 @@ Ctrl+C to stop.
 "@ -Monitor
 }
 
+function otvcheck {
+    Invoke-OtvRobotTask 'heading check (turn direction + marker orientation)' '-DMS6_TASK=4' -Label 'MS6' -Watch @"
+10-SECOND CHECK, RUN THIS BEFORE THE FIRST FULL RUN AND AFTER ANY REWIRING / MARKER CHANGE.
+WHAT TO DO
+  1. Unplug USB. OTV in the open middle of the arena, ~30 cm clear all round, marker 72 up.
+  2. Kill switch ON, step back. Once connected it waits 3 s, then: a short LEFT turn,
+     a short forward drive, and the same drive back. Last line: MS6: done
+WATCH FOR (below, after you press Enter)
+  CHECK 1 RESULT: turning OK   or   TURNING REVERSED
+  CHECK 2 RESULT: marker lines up   or   MARKER ROTATED (with the angle)
+SEND CLAUDE: both RESULT lines (and which way it physically turned).
+"@
+}
+
 function otvsite {
     Invoke-OtvRobotTask 'Nav 1 + mission (start square -> pool -> mission)' '-DMS6_TASK=1' -Label 'MS6' -Watch @"
 OBJECTIVES: Nav 1 (within 150 mm of the pool) + mission (depth, sample).
@@ -601,6 +616,7 @@ $script:OtvMenu = @(
     @{ Section = '1. BEFORE THE RUNS   (OTV on USB)' }
     @{ Key = 'c';  Title = 'Find the OTV';            When = 'is it plugged in, which COM port';                           Run = { otvconnect } }
     @{ Key = 'v';  Title = 'Vision check';            When = 'in the arena: x/y/theta for marker 72 (do this first)';      Run = { otvvisioncheck } }
+    @{ Key = 'hc'; Title = 'Heading check';           When = 'unplugged, kill switch ON: is turning / the marker right?'; Run = { otvcheck } }
     @{ Key = 'a';  Title = 'Arm, depth + pump check'; When = 'kill switch ON: type down / stow, p10 = pump 10 s into a cup'; Run = { otvarm } }
     @{ Section = '2. MS6 RUNS   (uploads; then unplug, place the OTV, kill switch ON, watch here)' }
     @{ Key = 'n';  Title = 'Nav 1 + mission';         When = 'start square -> pool -> depth + sample';                     Run = { otvsite } }
