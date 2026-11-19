@@ -400,7 +400,7 @@ known heights and compare. Ctrl+C to quit.
 function otvarm {
     Invoke-OtvRobotTask 'arm + depth calibration (bench test 8)' '-DTEST_MODE=8' @"
 Kill switch ON. Type a command + Enter:
-  down = arm to mission height ($(Get-OtvConfigValue 'ARM_DOWN_DEG') deg)   stow = arm horizontal ($(Get-OtvConfigValue 'ARM_STOW_DEG') deg)
+  down = arm to mission height ($(Get-OtvConfigValue 'ARM_DOWN_DEG') deg)   stow = arm folded for driving ($(Get-OtvConfigValue 'ARM_STOW_DEG') deg)
   150 = move arm to 150 deg   + / - = 1 deg (+5 / -5)
   d = keep this angle as ARM_DOWN_DEG (color sensor above water, tube in it)
   s = keep this angle as ARM_STOW_DEG

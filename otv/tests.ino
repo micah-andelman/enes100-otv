@@ -123,7 +123,7 @@ unsigned long gCalLastPrint = 0;
 static void calHelp() {
   Serial.println("ARM CAL commands (type, then Enter):");
   Serial.println("  down     move the arm to ARM_DOWN_DEG (mission height, from config.h)");
-  Serial.println("  stow     move the arm to ARM_STOW_DEG (horizontal, from config.h)");
+  Serial.println("  stow     move the arm to ARM_STOW_DEG (folded for driving, from config.h)");
   Serial.println("  150      move the arm to 150 deg (any 0-180)");
   Serial.println("  + / -    nudge 1 deg   (+5 / -5 = 5 deg)");
   Serial.println("  d        use this angle as ARM_DOWN_DEG (color sensor above water, tube in it)");

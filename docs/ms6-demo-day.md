@@ -55,5 +55,5 @@ Newest first. Date, what was run, what happened, what was changed.
 
 | Date | Run | Result | Change made |
 |---|---|---|---|
-| 2026-11-18 | Set depth sensor height | From the ruler reading at arm 20° | `SENSOR_HEIGHT_MM` 0 → 95 |
-| 2026-11-18 | Bench test 8, arm at 20° (`ARM_STOW_DEG`, horizontal) | Arm ultrasonic 90.7 mm, steady over ~10 readings; ruler says ~95 mm (reads ~4 mm short). Front ultrasonic 160 mm while touching the pool: pressed against a surface it reads past it (HC-SR04 blind zone ~2-3 cm). | none |
+| 2026-11-18 | Set depth sensor height | Ruler, arm horizontal (servos unpowered) | `SENSOR_HEIGHT_MM` 0 → 95 |
+| 2026-11-18 | Bench test 8, arm physically horizontal (battery out, servos unpowered: the 20° the code sent did not apply) | Arm ultrasonic 90.7 mm, steady over ~10 readings; ruler says ~95 mm (reads ~4 mm short). Front ultrasonic 160 mm while touching the pool: pressed against a surface it reads past it (HC-SR04 blind zone ~2-3 cm). | none |
