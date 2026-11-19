@@ -40,3 +40,4 @@ Newest first. Date, what was run, what happened, what was changed.
 
 | Date | Run | Result | Change made |
 |---|---|---|---|
+| 2026-11-18 | Bench test 8, arm at 20° (`ARM_STOW_DEG`, horizontal) | Arm ultrasonic 90.7 mm, steady over ~10 readings. Front ultrasonic 160 mm. | none |
