@@ -55,6 +55,7 @@ Newest first. Date, what was run, what happened, what was changed.
 
 | Date | Run | Result | Change made |
 |---|---|---|---|
+| 2026-11-18 | Bench test 8, arm lowered 5° to 101° (horizontal) | Arm ultrasonic 90.9 mm, steady (matches the 90.7 mm horizontal reading) | `ARM_DOWN_DEG` 96 → 101 |
 | 2026-11-18 | Bench test 8, arm at `ARM_DOWN_DEG` 96 (battery in) | Arm ultrasonic 101-111 mm (jumps between ~101 and ~110.6); with `SENSOR_HEIGHT_MM` 95 the depth is -6 to -16 mm. Front ultrasonic 58 mm. 96 deg is not the position where 90.7 / 95 mm was measured. | test 8 now moves to `ARM_DOWN_DEG` on start |
 | 2026-11-18 | New ArUco marker | — | `MARKER_ID` 80 → 72 (robot builds) |
 | 2026-11-18 | Set depth sensor height | Ruler, arm horizontal (servos unpowered) | `SENSOR_HEIGHT_MM` 0 → 95 |
