@@ -1,56 +1,36 @@
-# OTV Code: Team H2Woah!
+# ENES100 OTV: Team H2Woah! (Water Sampling)
 
-Code for our ENES100 OTV (Arduino UNO R4 WiFi).
+Firmware for our autonomous robot (OTV) in ENES100 at the University of Maryland, Fall 2026. The OTV starts in a random corner of a 4 m × 2 m arena, finds its way to a pool using an overhead camera and an ArUco marker, lowers an arm to measure the water depth and pump a 30 mL sample, then gets past three obstacles and under a limbo bar into the goal zone.
 
-## How teammates contribute
+I'm the electrical lead on an eight-person team and own the electronics and the code. Write-up with diagrams and a 3D tour: **[meandelman.com/otv](https://meandelman.com/otv)**.
 
-1. Write and test your code in the **Arduino IDE** as its own sketch (e.g. `Color_sensor.ino`).
-2. Put the `.ino` file in the team Google Drive folder **ENES 100-H2Woah**.
-   Use a clear name, and tell Micah when there's a new version.
-3. Micah pulls it into VS Code, ports it into the OTV code, and tests it on the robot.
+## Hardware
 
-You don't need GitHub or any install beyond the Arduino IDE.
+- Arduino UNO R4 WiFi, with position and heading from the course's overhead vision system over WiFi
+- Two 6 V gear motors on DRV8871 drivers, powered by a 9.6 V pack (PWM capped at 60%)
+- Servo arm with an ultrasonic depth sensor and the pump hose
+- Water pump switched by a MOSFET
+- Front ultrasonic sensor for obstacle detection
 
-## Rules for your sketch
+## How the code works
 
-- **Use the pins from the pin map** (below). Don't reuse a pin another subsystem owns.
-- **Keep the motor PWM at or below 153** (60%). The 6 V motors run on a 9.6 V pack.
-- **No `pinMode()` on servo pins** after `attach()`. It kills the servo signal.
-- Put the numbers you measured (angles, thresholds, flow rate) at the **top of the file**, with a comment saying how you measured them.
-
-| Pin | Function | Pin | Function |
-|---|---|---|---|
-| D2 / A4 | Front ultrasonic TRIG / ECHO | D10 | Pump MOSFET gate |
-| D3 / D5 | Left motor IN1 / IN2 | D11 | Servo 1 |
-| D6 / D9 | Right motor IN1 / IN2 | A2 | Servo 2 |
-| D7 / D8 | Arm ultrasonic TRIG / ECHO | A0 / A1 | Color S0 / S1 |
-| D4 | Color OUT | D12 / D13 | Color S2 / S3 |
-| A3 | Color LED/OE | A5 | unused |
-
-## Where things are (for Micah)
-
-| Path | What's in it |
+| File | What it does |
 |---|---|
-| `otv/config.h` | Every pin, limit, and tunable. Build flags `SIM` and `TEST_MODE`. |
+| `otv/config.h` | Every pin, limit and tunable in one place, with plain-English notes on which way to adjust each one |
 | `otv/otv.ino` | `setup()` and `loop()` |
-| `otv/drive.ino` | Motors (simulator: Tank, robot: DRV8871) |
-| `otv/mission.ino` | Arm, pump, depth, pollution |
-| `otv/nav.ino` | Vision navigation (wall hug, limbo) |
-| `otv/tests.ino` | Bench tests (TEST_MODE 1–7) |
-| `teammates/` | Teammate sketches as downloaded from Drive (read-only) |
-| `docs/bench-tests.md` | Bench test checklist |
-| `docs/ms5-demo-day.md` | MS5 demo day checklist (which command for each sub-task) |
-| `docs/aruco-marker-80.svg` | Printable vision marker |
-| `sim/otv_sim/otv_sim.ino` | Generated single file for the browser simulator |
+| `otv/drive.ino` | The only file that touches motors. One build flag switches between the real robot and the simulator |
+| `otv/nav.ino` | Heading control (`turnTo`, `driveTo`), wall hugging past the obstacles, limbo alignment, and the full route as separate legs |
+| `otv/mission.ino` | Arm, pump, depth measurement (snapped to the known 20/30/40 mm pool depths) |
+| `otv/tests.ino` | Bench tests for each subsystem, chosen with `TEST_MODE` |
+| `otv/ms5.ino`, `otv/ms6.ino` | Milestone demos, each runnable on its own so a failed attempt is quick to retry |
+| `sim/` | Single-file builds for the [ENES100 browser simulator](https://umdenes100.github.io/enes100-simulator/) |
+| `tools/` | PowerShell scripts: build and upload, generate the sim file, and run the simulator automatically over many random starts |
+| `docs/` | Bench-test checklist and demo-day run logs |
 
-## Uploading (Micah)
+Navigation was developed in the browser simulator first, then tuned on the robot. An automated sim harness (`tools/otv.ps1`) runs dozens of randomized courses and checks that the robot never leaves the arena; the last full check passed 40/40. GitHub Actions compiles the simulator and robot targets on every push.
 
-**Pull teammate code:** run the VS Code task **Pull Teammate Code**. It copies new or changed `.ino` files from the Drive folder into `teammates/`.
+## How I built it
 
-VS Code: **Ctrl+Shift+B** builds the robot target, asks for TEST_MODE and the COM port, then uploads.
-Find the port with `arduino-cli board list`. Close the Serial Monitor before uploading.
-After changing `otv/`, run the **Make Sim File** task to regenerate the simulator file.
+I designed the electronics, picked the parts, wired and tested the robot, and decided how the software should behave: the route strategy, the build-flag structure, which sensors to trust, and what to measure on the bench. The code was written with [Claude Code](https://claude.com/claude-code); commits it helped with are marked `Co-Authored-By: Claude`. Teammates wrote and calibrated subsystem sketches (pump, servo, color, ultrasonic) in the Arduino IDE, and I ported them into this codebase. Their original sketches aren't included here.
 
-**Physical Tank (nav testing):** with the Tank's power **off**, plug in USB and run
-`arduino-cli compile --upload -p COMx --fqbn arduino:avr:mega otv`. Unplug, place the Tank in a start square, then power it on.
-Never power the Tank on while it's plugged into the laptop. Output shows on the room 1120 vision page, not the Serial Monitor.
+This is a public copy of our team's working repo, which stays private.
