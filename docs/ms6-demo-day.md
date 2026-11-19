@@ -14,6 +14,7 @@ PowerShell window, or the vision page (`otvvision`, room 1120, marker 72).
 | Nav 1: within 150 mm of the mission site | `otvsite` / `n` | Nav 1 + Mission I-III |
 | Mission I-III (OTV placed at the pool) | `otvmission` / `i` | Mission I-III |
 | Nav 2 + Nav 3: past the obstacles, into the goal | `otvobst` / `o` | Nav 2 + Nav 3 |
+| Full run, everything in one go | `otvfull` / `f` | all six |
 
 Mission I-III are not defined in the MS6 doc (probably pollution, depth,
 >= 20 mL sample): confirm with the instructor. The color sensor is off

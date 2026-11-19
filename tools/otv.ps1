@@ -103,6 +103,7 @@ MS6 demos (any 4 of 6 objectives, one at a time, on the robot; vision system on)
   otvvisioncheck          OTV on USB in the arena: prints x/y/theta for marker 72 (do this first)
   otvsite                 Nav 1 + Mission I-III: start square -> pool -> measure, pump, send, stop
   otvmission              Mission I-III only: OTV placed at the pool by hand
+  otvfull                 FULL RUN: start -> pool -> mission -> obstacles -> limbo -> goal
   otvobst                 Nav 2 + Nav 3: landing zone -> wall hug past the obstacles -> limbo -> goal
   otvsitesim otvmissionsim otvobstsim   the same three as simulator dry runs
 
@@ -548,6 +549,27 @@ SEND CLAUDE: where it went wrong (which leg, what it hit or how close), or that 
 "@
 }
 
+function otvfull {
+    Invoke-OtvRobotTask 'FULL RUN (start -> pool -> mission -> obstacles -> limbo -> goal)' '' -Label 'MS6' -Watch @"
+ALL SIX OBJECTIVES IN ONE RUN (about 2-4 min).
+WHAT TO DO
+  1. Empty the sample bottle. Arm stowed. Unplug USB.
+  2. Put the OTV in either start square, marker 72 up, any heading.
+  3. Kill switch ON, step back. Within 30 s it connects, then:
+       drives to the pool in the other square -> lowers the arm, measures depth,
+       pumps, stows the arm, sends the depth -> backs up -> drives to x = 0.8 and
+       up toward the top wall -> hugs the top wall past the obstacles -> stops and
+       lowers the arm -> under the limbo -> stops in the goal zone.
+     Last line: Run complete
+  Be ready to hit the kill switch if it is about to hit a wall, obstacle or the limbo.
+WATCH FOR (below, after you press Enter)
+  Pose at ... after each leg, MS6/Mission lines at the pool, Obstacle ahead: backing up.
+RETRY: kill switch OFF, empty the bottle, put it back, kill switch ON (no upload needed).
+SEND CLAUDE: the last leg that worked and what went wrong after it, front-to-pool
+distance (mm), depth sent vs real, mL in the bottle.
+"@
+}
+
 # Sim dry runs of the MS6 demos: same code, browser simulator (mission is a stub).
 function Invoke-OtvMs6Sim([int]$Ms6Task, [string]$Name, [string]$Title, [string]$Note) {
     $out = Join-Path $script:OtvRoot "sim\ms6\$Name.ino"
@@ -584,6 +606,7 @@ $script:OtvMenu = @(
     @{ Key = 'n';  Title = 'Nav 1 + mission';         When = 'start square -> pool -> depth + sample';                     Run = { otvsite } }
     @{ Key = 'i';  Title = 'Mission only';            When = 'OTV placed at the pool by hand -> depth + sample';           Run = { otvmission } }
     @{ Key = 'o';  Title = 'Nav 2 + Nav 3';           When = 'landing zone -> past the obstacles -> under the limbo -> goal'; Run = { otvobst } }
+    @{ Key = 'f';  Title = 'FULL RUN';                When = 'start -> pool -> mission -> obstacles -> limbo -> goal';    Run = { otvfull } }
     @{ Key = 'w';  Title = 'Watch the vision system'; When = 'live pose + OTV prints (again, or in a 2nd window)';         Run = { otvwatch } }
     @{ Section = '3. OTHER' }
     @{ Key = 'd';  Title = 'Dry run in the simulator'; When = 'the same n / i / o code in the browser sim, no robot';      Run = {
