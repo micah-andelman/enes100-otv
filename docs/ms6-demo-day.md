@@ -36,7 +36,7 @@ WiFi for `otvwatch` and the vision page.
 2. Open a second PowerShell window and run `otvwatch` (menu `w`). It shows
    our live x / y / theta and every line the OTV prints.
 3. Unplug USB. Put the OTV where the steps say, marker 80 facing up. Kill switch ON.
-4. Within 30 s `otvwatch` shows `Connecting...`, then `Vision system connected`, then
+4. Within 30 s `otvwatch` shows our marker and `Vision system connected`, then
    the run. Prints end with `MS6: done`.
    - If the marker can't be seen at the start, it prints `No vision at start, aborting run`
      and doesn't move: check the marker is flat, uncovered and in the camera's view.
