@@ -63,6 +63,7 @@ Newest first. Date, what was run, what happened, what was changed.
 
 | Date | Run | Result | Change made |
 |---|---|---|---|
+| 2026-11-18 | Sim: `otvsimcheck -Runs 3 -Only obst` (arm lowered before the limbo) | 3/3 PASS: all reached the goal (x 3.72-3.74), never outside the course, min obstacle gap 2.8 cm, limbo y 1.38-1.64 | none |
 | 2026-11-18 | Team decision | Stowed arm is too tall for the limbo | `legLimboAlign` stops after the wall hug and lowers the arm to `ARM_DOWN_DEG` before the limbo |
 | 2026-11-18 | Bench test 8, arm stowed (20°, battery + kill switch ON) | Front ultrasonic 381-495 mm: no hose echo with the arm stowed. Arm ultrasonic 400-490 mm (points away when folded) | none |
 | 2026-11-18 | Bench test 8, `stow` sent but battery OFF (servos unpowered, arm did NOT move to 20°), front ultrasonic | 263-729 mm, jumping: not a stowed-arm reading. Earlier at the lowered arm angles: 58 mm (96°), 23-42 mm (101-106°) | none |
