@@ -23,7 +23,7 @@ const int ARM_STOW_DEG = 20;
 const int ARM_DOWN_DEG = 96;
 const unsigned long SERVO_STEP_MS = 15;
 const unsigned long ARM_SETTLE_MS = 500;
-const float SENSOR_HEIGHT_MM = 0;
+const float SENSOR_HEIGHT_MM = 95;
 const int COLOR_POLLUTED_THRESH = 400;
 
 const char* const TEAM_NAME = "H2Woah!";

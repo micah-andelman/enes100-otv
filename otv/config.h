@@ -26,7 +26,7 @@ const int   ARM_STOW_DEG       = 20;     // servo angle with the arm folded up f
 const int   ARM_DOWN_DEG       = 96;     // servo angle with the arm down at the water. Tube not in the water -> change a few degrees at a time.
 const unsigned long SERVO_STEP_MS = 15;  // ms per degree of arm movement. Arm too jerky / Arduino resets -> bigger. Too slow -> smaller.
 const unsigned long ARM_SETTLE_MS = 500; // ms to wait after lowering the arm before measuring. Depth readings jumpy -> bigger.
-const float SENSOR_HEIGHT_MM   = 0;      // height (mm) of the depth sensor above the pool bottom. Depth reads too high -> smaller. Too low -> bigger.
+const float SENSOR_HEIGHT_MM   = 95;     // ruler, 2026-11-18. height (mm) of the depth sensor above the pool bottom. Depth reads too high -> smaller. Too low -> bigger.
 const int   COLOR_POLLUTED_THRESH = 400; // color sensor cutoff. Clean water reads "polluted" -> smaller. Polluted reads "clean" -> bigger.
 // ============================================================ end of TUNABLES
 
