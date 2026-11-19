@@ -540,6 +540,9 @@ void legObstacles() {
 }
 void legLimboAlign() {
   logMsg("Limbo");
+  stopDrive();
+  logMsg("Arm down for the limbo");
+  armDown();
   followLine(LIMBO_LANE_Y, LIMBO_ALIGN_X, FOLLOW_PWM, false, legTimeoutMs(LIMBO_ALIGN_X - HUG_END_X + WALL_HUG_Y - LIMBO_LANE_Y));
   logPose("Pose at limbo align");
 }

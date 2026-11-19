@@ -449,6 +449,12 @@ void legObstacles() {
 // the log), stopping just before the limbo.
 void legLimboAlign() {
   logMsg("Limbo");
+  // Stowed, the arm is too tall for the limbo: lower it to ARM_DOWN_DEG
+  // (horizontal) here, after the wall hug (lowered, the hose sits in front
+  // of the front ultrasonic). Stop first: the arm move blocks ~1-2 s.
+  stopDrive();
+  logMsg("Arm down for the limbo");
+  armDown();
   followLine(LIMBO_LANE_Y, LIMBO_ALIGN_X, FOLLOW_PWM, false, legTimeoutMs(LIMBO_ALIGN_X - HUG_END_X + WALL_HUG_Y - LIMBO_LANE_Y));
   logPose("Pose at limbo align");
 }

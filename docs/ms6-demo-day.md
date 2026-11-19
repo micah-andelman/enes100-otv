@@ -55,6 +55,7 @@ Newest first. Date, what was run, what happened, what was changed.
 
 | Date | Run | Result | Change made |
 |---|---|---|---|
+| 2026-11-18 | Team decision | Stowed arm is too tall for the limbo | `legLimboAlign` stops after the wall hug and lowers the arm to `ARM_DOWN_DEG` before the limbo |
 | 2026-11-18 | Bench test 8, arm stowed (20°, battery + kill switch ON) | Front ultrasonic 381-495 mm: no hose echo with the arm stowed. Arm ultrasonic 400-490 mm (points away when folded) | none |
 | 2026-11-18 | Bench test 8, `stow` sent but battery OFF (servos unpowered, arm did NOT move to 20°), front ultrasonic | 263-729 mm, jumping: not a stowed-arm reading. Earlier at the lowered arm angles: 58 mm (96°), 23-42 mm (101-106°) | none |
 | 2026-11-18 | Team decisions | Color sensor dropped. Pump hose hangs 50-65 mm in front of the front ultrasonic | `USE_COLOR_SENSOR` 0 (no WATER_TYPE sent); front readings 50-65 mm ignored (`FRONT_HOSE_MIN_MM`/`MAX_MM`) |
