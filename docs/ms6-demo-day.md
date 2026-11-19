@@ -64,6 +64,7 @@ Newest first. Date, what was run, what happened, what was changed.
 
 | Date | Run | Result | Change made |
 |---|---|---|---|
+| 2026-11-18 | `otvcheck` run 1 + 10 s still sample (OTV at x 0.32, y 1.54, said to be facing the limbo) | Check aborted: marker 72 never seen during its 10 s start wait. Still sample: seen in only 69% of vision updates; theta -0.64 rad (-37°) instead of ~0 | none yet: marker angle + visibility to fix |
 | 2026-11-18 | First full run on the course | Wiggled in the start square, never reached the mission site, then drove +x into an obstacle instead of along the top wall. Suspect turning reversed (L/R motors swapped) or marker 72 mounted rotated | added `otvcheck` (MS6_TASK 4, menu `hc`) to tell which |
 | 2026-11-18 | Uploaded the full run (`SIM=0`, marker 72) to the OTV | ready for the first course run | none |
 | 2026-11-18 | Sim: `otvsimcheck -Runs 3 -Only obst` (arm lowered before the limbo) | 3/3 PASS: all reached the goal (x 3.72-3.74), never outside the course, min obstacle gap 2.8 cm, limbo y 1.38-1.64 | none |
