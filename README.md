@@ -29,8 +29,10 @@ I'm the electrical lead on an eight-person team and own the electronics and the 
 
 Navigation was developed in the browser simulator first, then tuned on the robot. An automated sim harness (`tools/otv.ps1`) runs dozens of randomized courses and checks that the robot never leaves the arena; the last full check passed 40/40. GitHub Actions compiles the simulator and robot targets on every push.
 
-## How I built it
+## How it was built
 
-I designed the electronics, picked the parts, wired and tested the robot, and decided how the software should behave: the route strategy, the build-flag structure, which sensors to trust, and what to measure on the bench. The code was written with [Claude Code](https://claude.com/claude-code); commits it helped with are marked `Co-Authored-By: Claude`. Teammates wrote and calibrated subsystem sketches (pump, servo, color, ultrasonic) in the Arduino IDE, and I ported them into this codebase. Their original sketches aren't included here.
+I designed the electronics, picked the parts, wired and tested the robot, and decided how the software should behave: the route strategy, the build-flag structure, which sensors to trust, and what to measure on the bench. Teammates wrote and calibrated subsystem sketches (pump, servo, color, ultrasonic) in the Arduino IDE, and I ported them into this codebase. Their original sketches aren't included here.
+
+Built with Arduino UNO R4 WiFi, C++, arduino-cli, GitHub Actions and [Claude Code](https://claude.com/claude-code).
 
 This is a public copy of our team's working repo, which stays private.
