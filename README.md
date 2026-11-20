@@ -2,7 +2,7 @@
 
 Firmware for our autonomous robot (OTV) in ENES100 at the University of Maryland, Fall 2026. The OTV starts in a random corner of a 4 m × 2 m arena, finds its way to a pool using an overhead camera and an ArUco marker, lowers an arm to measure the water depth and pump a 30 mL sample, then gets past three obstacles and under a limbo bar into the goal zone.
 
-On an eight-person team, I designed the entire electrical subsystem and built all of the navigation code on my own. Write-up with diagrams and a 3D tour: **[meandelman.com/otv](https://meandelman.com/otv)**.
+On an eight-person team, I designed the entire electrical subsystem and implemented my navigation code with subsystem sketches from my teammates. Write-up with diagrams and a 3D tour: **[meandelman.com/otv](https://meandelman.com/otv)**.
 
 ## Hardware
 
